@@ -1,0 +1,33 @@
+__pycache__/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+*.pyc
+*.py[cod]
+.DS_Store
+
+# pyenv
+.python-version
+
+# Environments
+.env
+.venv
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# JetBrains
+.idea/
+
+/coverage.xml
+/.coverage
+
+
+# Agentics
+agentics.code-workspace
+data/*
+# Test reports
+report.html
