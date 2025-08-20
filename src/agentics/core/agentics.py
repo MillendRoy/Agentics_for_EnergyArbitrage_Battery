@@ -31,7 +31,8 @@ from agentics.abstractions.pydantic_transducer import (
     PydanticTransducerVLLM,
 )
 from agentics.abstractions.structured_output import generate_structured_output
-from agentics.core.globals import Memory
+
+# from agentics.core.globals import Memory
 from agentics.core.llm_connections import watsonx_crewai_llm
 from agentics.core.utils import (
     are_models_structurally_identical,
@@ -47,7 +48,7 @@ from agentics.core.utils import (
     sanitize_dict_keys,
 )
 
-memory = Memory()
+# memory = Memory()
 
 
 T = TypeVar("T", bound=BaseModel)
