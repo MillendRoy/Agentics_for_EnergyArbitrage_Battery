@@ -51,7 +51,6 @@ version = "0.0.0"
 pytest = "^8.4.0"
 black = "^25.1.0"
 isort = "^6.0.1"
-memory-backend-client = {path = "src/lib/memory/memory-backend-client", develop=true}
 pre-commit = "^4.2.0"
 pdbpp = "^0.11.6"
 pytest-asyncio = "^1.0.0"
