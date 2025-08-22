@@ -112,6 +112,9 @@ class ATypeMapping(BaseModel):
     mapping: Optional[dict] = Field(None, description="Ground Truth mappings")
 
 
+AG = TypeVar("A", bound="Agentics")
+
+
 class Agentics(BaseModel):
     """
     Agentics is a Python class that wraps a list of Pydantic objects and enables structured, type-driven logical transduction between them.
@@ -179,7 +182,7 @@ class Agentics(BaseModel):
     def __len__(self):
         return len(self.states)
 
-    def __call__(self, *fields) -> "Agentics":
+    def __call__(self, *fields) -> AG:
         """Returns a new agentic with the subtype of fields"""
         atype = self.subset_atype(fields)
         new_ag = self.rebind_atype(atype, {i: i for i in fields})
@@ -191,13 +194,13 @@ class Agentics(BaseModel):
         return self.states[index]
 
     # Synchronous map
-    def filter(self, func: Callable[[BaseModel], bool]) -> "Agentics":
+    def filter(self, func: Callable[[BaseModel], bool]) -> AG:
         """func should be a function that takes as an input a state and return a boolean, false will be filtered out"""
         self.states = [state for state in self.states if func(state)]
         return self
 
     # Asynchronous map with exception-safe job gathering
-    async def amap(self, func: Awaitable) -> "Agentics":
+    async def amap(self, func: Awaitable) -> AG:
         if self.verbose_transduction:
             logger.debug(f"Executing amap on function {func}")
 
@@ -269,9 +272,7 @@ class Agentics(BaseModel):
         # return self
 
     @classmethod
-    def from_states(
-        cls, states: List[BaseModel], atype: BaseModel = None
-    ) -> "Agentics":
+    def from_states(cls, states: List[BaseModel], atype: BaseModel = None) -> AG:
         if len(states) == 0:
             return cls()
         else:
@@ -297,7 +298,7 @@ class Agentics(BaseModel):
         max_rows: int = None,
         task_description: str = None,
         verbose=False,
-    ) -> "Agentics":
+    ) -> AG:
         """
         Import an object of type Agentics from a CSV file.
         If atype is not provided it will be automatically inferred from the column names and
@@ -325,7 +326,7 @@ class Agentics(BaseModel):
     @classmethod
     def from_dataframe(
         cls, dataframe: DataFrame, atype: Type[BaseModel] = None, max_rows: int = None
-    ) -> "Agentics":
+    ) -> AG:
         """
         Import an object of type Agentics from a Pandas DataFrame object.
         If atype is not provided it will be automatically inferred from the column names and
@@ -349,7 +350,7 @@ class Agentics(BaseModel):
         atype: Optional[Type[BaseModel]] = None,
         max_rows: Optional[int] = None,
         jsonl: bool = False,
-    ) -> "Agentics":
+    ) -> AG:
         """
         Import an object of type Agentics from jsonl file.
         If atype is not provided it will be automatically inferred from the json schema.
@@ -465,7 +466,7 @@ class Agentics(BaseModel):
         copy_instance.tools = agentics_instance.tools  # shallow copy, ok if immutable
         return copy_instance
 
-    def truncate_states(self, start: int, end: int) -> "Agentics":
+    def truncate_states(self, start: int, end: int) -> AG:
         self.states = self.states[start:end]
         return self
 
@@ -483,7 +484,7 @@ class Agentics(BaseModel):
 
     async def copy_fewshots_from_ground_truth(
         self, source_target_pairs: list[tuple[str, str]], first_n: Optional[int] = None
-    ) -> "Agentics":
+    ) -> AG:
         """for each state, copy fields values from ground truth to target attributes
         to be used as fewshot during transduction
         """
@@ -720,7 +721,7 @@ class Agentics(BaseModel):
 
     async def apply_to_states(
         self, func: Callable[[BaseModel], BaseModel], first_n: Optional[int] = None
-    ) -> "Agentics":
+    ) -> AG:
         """
         Applies a function to each state in the Agentics object.
 
@@ -738,7 +739,7 @@ class Agentics(BaseModel):
             ] + self.states[first_n:]
         return self
 
-    def product(self, other: "Agentics") -> "Agentics":
+    def product(self, other: AG) -> AG:
         """
         AG1.product(AG2, include_fields) returns the product of two types AG'
 
@@ -782,7 +783,7 @@ class Agentics(BaseModel):
 
         return reduce((lambda x, y: Agentics.add_states(x, y)), extended_ags)
 
-    def quotient(self, other: "Agentics") -> list["Agentics"]:
+    def quotient(self, other: AG) -> list[AG]:
         """
         AG1.quotient(AG') returns the list of quotients [AG1]
 
@@ -806,7 +807,7 @@ class Agentics(BaseModel):
         return quotient_list
 
     @staticmethod
-    def add_states(first: "Agentics", other: "Agentics") -> "Agentics":
+    def add_states(first: AG, other: AG) -> AG:
         return Agentics(
             atype=first.atype, tools=first.tools, states=first.states + other.states
         )
@@ -851,7 +852,7 @@ class Agentics(BaseModel):
 
         return NotImplemented
 
-    async def map_atypes(self, other: "Agentics") -> ATypeMapping:
+    async def map_atypes(self, other: AG) -> ATypeMapping:
         if self.verbose_agent:
             logger.debug(f"Mapping type {other.atype} into type {self.atype}")
 
@@ -877,7 +878,7 @@ class Agentics(BaseModel):
             attribute_mappings=output.states,
         )
 
-    async def map_atypes_fast(self, other: "Agentics") -> ATypeMapping:
+    async def map_atypes_fast(self, other: AG) -> ATypeMapping:
         if self.verbose_agent:
             logger.debug(f"Mapping type {other.atype} into type {self.atype}")
 
@@ -907,7 +908,7 @@ class Agentics(BaseModel):
         output = await output_process
         return output
 
-    def get_random_sample(self, percent: float) -> "Agentics":
+    def get_random_sample(self, percent: float) -> AG:
         if not (0 <= percent <= 1):
             raise ValueError("Percent must be between 0 and 1")
 
