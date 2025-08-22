@@ -28,6 +28,5 @@ dmypy.json
 
 # Agentics
 agentics.code-workspace
-data/*
 # Test reports
 report.html

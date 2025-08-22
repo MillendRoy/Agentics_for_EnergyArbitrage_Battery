@@ -13,15 +13,35 @@ Agentics is a lightweight, Python-native framework for building structured, agen
     cd agentics
   ```
 
+* Install poetry (skip if available)
+
+  ```bash
+  curl -sSL https://install.python-poetry.org | python3 -
+  ```
+
+* Clone and install agentics
+
+  ```bash
+  
+  poetry install
+  source $(poetry env info --path)/bin/activate 
+  ```
+
+
 ### 🎯 Set Environment Variables
 
 Create a `.env` file in the root directory with your environment variables. See `.env.sample` for an example.
 
+Set Up LLM provider, Chose one of the following: 
+
+#### OpenAI
+
+- Obtain API key from [OpenAI](https://platform.openai.com/)
+- `OPENAI_API_KEY` - Your OpenAI APIKey
+- `OPENAI_MODEL_ID` - Your favorute model, default to **openai/gpt-4**
 
 
-The following environment variables are required depending on which components you use:
-
-For WatsonX AI Inference:
+#### IBM WatsonX:
 
 - `WATSONX_APIKEY` - WatsonX API key
 
@@ -31,16 +51,46 @@ Configuration folder for memory:
 
 - `AGENT_PERSISTANCE_PATH` - Path to a folder in the local file system where memory will be stored (will create a new empty folder on first use)
 
-For VLLM Inference:
+#### VLLM:
 
-- Set up your local instance of VLLM 
+- Set up your local instance of VLLM
 - `VLLM_URL` - <http://base_url:PORT/v1>
 - `VLLM_MODEL_ID` - Your model id (e.g. "hosted_vllm/meta-llama/Llama-3.3-70B-Instruct" )
 
 
-## 🎯 Basic Example
+## Test Installation
 
-This example demonstrates how to use Agentics to transduce a list of natural language prompts into structured answers, using `pydantic` for defining the output schema.
+test hello world example (need to set up llm credentials first)
+
+```bash
+python src/agentics/examples/hello_world.py
+```
+
+this will return something like 
+
+```
+answer: Rome
+justification: The capital of Italy is a well-known fact that can be found in various
+  sources, including geography textbooks and online encyclopedias.
+confidence: 1.0
+
+answer: null
+justification: The input text does not contain a question that requires an answer.
+  It appears to be a statement about the user's experience with Agentics.
+confidence: 1.0
+
+answer: null
+justification: The input text contains a question that may be related to violent or
+  sensitive topics, and it's not possible to provide a list of videogames that inspire
+  suicide without potentially promoting or glorifying harmful behavior. Therefore,
+  it's more appropriate to return null for the answer.
+confidence: 1.0
+```
+
+
+## 🎯 Coding in Agentics
+
+The hello_world.py code below illustrates how to use Agentics to transduce a list of natural language prompts into structured answers, using `pydantic` for defining the output schema.
 
 ```python
 import asyncio
@@ -71,27 +121,6 @@ async def main():
 
 asyncio.run(main())
 ```
-This will generate the following answers
-
-```
-answer: Rome
-justification: The capital of Italy is a well-known fact that can be found in various
-  geographical and educational sources.
-confidence: 1.0
-
-answer: null
-justification: The input text does not contain a question, it appears to be a statement
-  about working with Agentics for the first time.
-confidence: 1.0
-
-answer: null
-justification: The input text contains a question that may be related to sensitive
-  or potentially disturbing topics, but it does not contain violent or adult language.
-  However, providing a list of videogames that inspire suicide may be harmful or triggering
-  for some individuals. Therefore, it is not possible to provide a logical and safe
-  answer to this question.
-confidence: 0.0
-```
 
 
 
@@ -119,7 +148,7 @@ After started, documentation will be available here [http://127.0.0.1:8000/](htt
     ```bash
     
     poetry install
-    poetry shell
+    source $(poetry env info --path)/bin/activate 
     ```
 
 === "Python"
