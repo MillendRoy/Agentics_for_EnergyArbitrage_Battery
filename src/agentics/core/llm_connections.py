@@ -7,6 +7,15 @@ from openai import AsyncOpenAI
 load_dotenv()
 
 
+openai_crewai_llm = LLM(
+    model=os.getenv("OPENAI_MODEL_ID"), # call model by provider/model_name
+    temperature=0.8,
+    top_p=0.9,
+    stop=["END"],
+    api_key=os.getenv("OPENAI_API_KEY"),
+    seed=42
+)
+
 watsonx_crewai_llm = LLM(
     model=os.getenv("MODEL_ID"),
     base_url=os.getenv("WATSONX_URL"),
@@ -32,3 +41,4 @@ vllm_crewai = LLM(
     max_tokens=8000,
     temperature=0.0,
 )
+

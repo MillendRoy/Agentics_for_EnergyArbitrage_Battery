@@ -5,12 +5,25 @@
     <img src="image.png" height="128">
 </p>
 
-Author: Alfio Massimiliano Gliozzo (gliozzo@us.ibm.com)
-
-
-
 
 Agentics is a Python framework that provides structured, scalable, and semantically grounded agentic computation. It enables developers to build AI-powered pipelines where all operations are based on typed data transformations, combining the power of Pydantic models and LLMs with the flexibility of asynchronous execution.
+
+
+## Authors
+
+- Principal Investigator 
+    - Alfio Massimiliano Gliozzo, IBM Research, gliozzo@us.ibm.com
+- Core Contributors:
+    - Junkyu Lee, IBM Research
+    - Naweed Ahmad, IBM Research
+    - Nahuel Defosse, IBM Research
+    - Christodoulos Constantinides, IBM Watson
+    - Mustafa Eyceoz, RedHat
+
+We welcome new AG entusiasts to extend this framework with new applications and extension to the language. 
+
+
+
 
 ## 🚀 Key Features
 
@@ -43,7 +56,7 @@ Agentics is a Python framework that provides structured, scalable, and semantica
 
 ## 📘 Example Usage
 ```python
-from agentics import Agentics
+from agentics import Agentics as AG
 from pydantic import BaseModel
 
 class Answer(BaseModel):
@@ -52,19 +65,20 @@ class Answer(BaseModel):
     confidence: float
 
 # Instantiate an Agentics object with a target type
-qa_agent = Agentics(atype=Answer)
+qa_agent = AG(atype=Answer)
 
 # Perform transduction from text prompts
 qa_agent = await (qa_agent << [
     "Who is the president of the US?",
     "When is the end of the world predicted?",
     "This is a report from the US embassy"
-]) 
-```
+])
 
 # Access structured answers
 for result in qa_agent.states:
     print(result.answer, result.confidence)
+
+```
 
 🧠 Conceptual Overview
 
@@ -117,7 +131,12 @@ Apache 2.0
 
 👥 Authors
 
-Developed by Alfio Gliozzo and contributors. Contributions welcome!
+Developed by Alfio Gliozzo and contributors. 
+
+
+Contributions welcome!
+
+
 Core team  Alfio Gliozzo, Junkyu Lee, Naweed Aghmad, Nahuel Defosse, Christodoulos Constantinides, Mustafa Eyceoz and contributors.
 
 ## Contributing
