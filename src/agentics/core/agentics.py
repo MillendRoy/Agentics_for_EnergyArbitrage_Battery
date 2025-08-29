@@ -33,7 +33,7 @@ from agentics.abstractions.pydantic_transducer import (
 from agentics.abstractions.structured_output import generate_structured_output
 
 # from agentics.core.globals import Memory
-from agentics.core.llm_connections import watsonx_llm
+from agentics.core.llm_connections import ollama_llm
 from agentics.core.utils import (
     are_models_structurally_identical,
     chunk_list,
@@ -136,8 +136,9 @@ class Agentics(BaseModel):
         None,
         description="""this is the list of field that will be used for the transduction, both incoming and outcoming""",
     )
-    llm: Any = Field(watsonx_llm, exclude=True)
-    tools: Optional[List[Any]] = Field(None, exclude=True, description="   ")
+    llm: Any = Field(ollama_llm, exclude=True)
+    tools: Optional[List[Any]] = Field(None, exclude=True)
+    max_iter:int = Field(3, exclude=True,description="Max number of iterations for the agent to provide a final transduction when using tools.")
     instructions: Optional[str] = Field(
         """Generate an object of the specified type from the following input.""",
         description="Special instructions to be given to the agent for executing transduction",
@@ -623,6 +624,7 @@ class Agentics(BaseModel):
                     llm=self.llm,
                     intensional_definiton=instructions,
                     verbose=self.verbose_agent,
+                    max_iter=self.max_iter,
                     **self.crew_prompt_params,
                 )
                 output_states_tmp = await asyncio.wait_for(
@@ -664,6 +666,7 @@ class Agentics(BaseModel):
                     llm=self.llm,
                     intensional_definiton=instructions,
                     verbose=self.verbose_agent,
+                    max_iter=self.max_iter
                     **self.crew_prompt_params,
                 )
                 for state in chunk:

@@ -6,8 +6,8 @@ from pydantic import BaseModel
 from agentics import Agentics as AG
 from typing import Optional
 from dotenv import load_dotenv
-from agentics.core.llm_connections import watsonx_llm
-
+import os
+from agentics.core.llm_connections import  available_llms
 load_dotenv()
 
 ## Define output type
@@ -29,14 +29,18 @@ async def main():
 
     ## Transduce input strings into objects of type Answer. 
     ## You can customize this providing different llms and instructions. 
-
+    
     answers = await (AG(atype=Answer, 
-                        llm= watsonx_llm,
+                        
+                        llm=available_llms[os.getenv("SELECTED_LLM")], ##Select your LLM from list of available options
                         instructions="""Provide an Answer for the following input text 
                         only if it contains an appropriate question that do not contain
                         violent or adult language """
                         ) << input_questions)
 
     print(answers.pretty_print())
-
-asyncio.run(main())
+    
+if __name__ == "__main__":
+    if len(available_llms)>0:
+        asyncio.run(main())
+    else: print("Please set API key in your .env file.")
