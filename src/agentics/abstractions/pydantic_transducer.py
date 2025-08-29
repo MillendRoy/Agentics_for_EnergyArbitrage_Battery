@@ -105,6 +105,7 @@ class PydanticTransducerCrewAI:
     llm: Any
     intensional_definiton: str
     verbose: bool = False
+    max_iter: int = 3
     MAX_CHAR_PROMPT: int = 15000
 
     def __init__(
@@ -114,6 +115,7 @@ class PydanticTransducerCrewAI:
         llm=None,
         tools=None,
         intensional_definiton=None,
+        max_iter=max_iter,
         **kwargs,
     ):
         self.atype = atype
@@ -135,7 +137,7 @@ class PydanticTransducerCrewAI:
             goal=self.prompt_params["goal"],
             backstory=self.prompt_params["backstory"],
             verbose=verbose,
-            max_iter=3,
+            max_iter=max_iter,
             llm=self.llm,
             tools=tools if tools else [],
         )

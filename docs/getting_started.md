@@ -4,7 +4,25 @@
 
 Agentics is a lightweight, Python-native framework for building structured, agentic workflows over tabular or JSON-based data using Pydantic types and transduction logic. Designed to work seamlessly with large language models (LLMs), Agentics enables users to define input and output schemas as structured types and apply declarative, composable transformations—called transductions—across data collections. It supports asynchronous execution, built-in memory for structured retrieval-augmented generation (RAG), and self-transduction for tasks like data imputation and few-shot learning. With no-code and low-code interfaces, Agentics is ideal for rapidly prototyping intelligent systems that require structured reasoning, flexible memory access, and interpretable outputs.
 
-## Installation
+## Quick Installation
+
+You can use agentics as a library by simply importing it as follows
+
+```shell
+conda create -n agentics python=3.12
+pip install agentics-py
+```
+
+Now you can embed agentic in your python code using the followin import for AG class
+
+```python
+from agentics import Agentics as AG
+```
+
+## Developer Installation
+
+Full install is recommended if you want to contribute back to the Agentics. 
+
 
 * Clone the repository
 
@@ -44,10 +62,10 @@ Set Up LLM provider, Chose one of the following:
 - Download and install [Ollama](https://ollama.com/)
 - Download a Model. You should use a model that support reasoning and fit your GPU. So smaller are preferred. 
 ```
-ollama pull ollama/deepseek-r1:latest
+ollama pull deepseek-r1:latest
 ```
 - "OLLAMA_MODEL_ID" - ollama/gpt-oss:latest (better quality), ollama/deepseek-r1:latest (smaller)
-
+- "OLLAMA_TURBO_API_KEY" - (Optional if you want to use the turbo option which requires a key")
 
 
 
