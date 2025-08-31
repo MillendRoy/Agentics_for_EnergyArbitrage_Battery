@@ -166,8 +166,7 @@ class Agentics(BaseModel):
         None,
         description="""If not null, the specified file will be created and used to save the intermediate results of transduction from each batch. The file will be updated in real time and can be used for monitoring""",
     )
-    batch_size_transduction: Optional[int] = 20
-    batch_size_amap: Optional[int] = 10
+    batch_size: Optional[int] = 20
     verbose_transduction: bool = True
     verbose_agent: bool = False
 
@@ -207,7 +206,7 @@ class Agentics(BaseModel):
             logger.debug(f"Executing amap on function {func}")
 
         ## TODO override states
-        chunks = chunk_list(self.states, self.batch_size_transduction)
+        chunks = chunk_list(self.states, self.batch_size)
         results = []
         i = 1
         for chunk in chunks:
@@ -230,18 +229,18 @@ class Agentics(BaseModel):
                 end_time = time.time()
                 if self.verbose_transduction:
                     logger.debug(
-                        f"{i * self.batch_size_amap if i > 1 else len(chunk)} states processed. {(end_time - begin_time) / self.batch_size_amap} seconds average per state in the last chunk ..."
+                        f"{i * self.batch_size if i > 1 else len(chunk)} states processed. {(end_time - begin_time) / self.batch_size} seconds average per state in the last chunk ..."
                     )
                 i += 1
             except asyncio.TimeoutError and Exception as e:
                 size = (
-                    self.batch_size_amap
-                    if len(chunk) == self.batch_size_amap
+                    self.batch_size
+                    if len(chunk) == self.batch_size
                     else len(chunk)
                 )
                 if self.verbose_transduction:
                     logger.debug(
-                        f"ERROR, states {(i - 1) * self.batch_size_amap + 1} to {((i - 1) * self.batch_size_amap) + size} have not been transduced"
+                        f"ERROR, states {(i - 1) * self.batch_size + 1} to {((i - 1) * self.batch_size) + size} have not been transduced"
                     )
                 if self.verbose_transduction:
                     logger.debug(e)
@@ -600,7 +599,7 @@ class Agentics(BaseModel):
 
         ## Perform Transduction
         ## TODO override states
-        chunks = chunk_list(input_prompts, self.batch_size_transduction)
+        chunks = chunk_list(input_prompts, self.batch_size)
         output_states = []
 
         i = 1
@@ -641,8 +640,8 @@ class Agentics(BaseModel):
                 ]
                 end_time = time.time()
                 size = (
-                    self.batch_size_transduction
-                    if len(chunk) == self.batch_size_transduction
+                    self.batch_size
+                    if len(chunk) == self.batch_size
                     else len(chunk)
                 )
                 if self.verbose_transduction:
@@ -655,8 +654,8 @@ class Agentics(BaseModel):
                         "Warning: Failed to transduce batch. Executing individual steps"
                     )
                 size = (
-                    self.batch_size_transduction
-                    if len(chunk) == self.batch_size_transduction
+                    self.batch_size
+                    if len(chunk) == self.batch_size
                     else len(chunk)
                 )
 
@@ -699,7 +698,7 @@ class Agentics(BaseModel):
                         else: f.write(self.atype().model_dump_json() + "\n")
             if self.verbose_transduction:
                 logger.debug(
-                    f"{i * self.batch_size_transduction if i > 1 else len(chunk)} states processed in {(end_time - begin_time) / self.batch_size_transduction} seconds average per state ..."
+                    f"{i * self.batch_size if i > 1 else len(chunk)} states processed in {(end_time - begin_time) / self.batch_size} seconds average per state ..."
                 )
             i += 1
 
