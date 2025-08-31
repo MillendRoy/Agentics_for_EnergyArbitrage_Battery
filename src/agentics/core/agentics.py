@@ -33,7 +33,7 @@ from agentics.abstractions.pydantic_transducer import (
 from agentics.abstractions.structured_output import generate_structured_output
 
 # from agentics.core.globals import Memory
-from agentics.core.llm_connections import ollama_llm
+from agentics.core.llm_connections import watsonx_llm
 from agentics.core.utils import (
     are_models_structurally_identical,
     chunk_list,
@@ -46,6 +46,7 @@ from agentics.core.utils import (
     pydantic_model_from_jsonl,
     remap_dict_keys,
     sanitize_dict_keys,
+    pretty_print_atype
 )
 
 # memory = Memory()
@@ -136,7 +137,7 @@ class Agentics(BaseModel):
         None,
         description="""this is the list of field that will be used for the transduction, both incoming and outcoming""",
     )
-    llm: Any = Field(ollama_llm, exclude=True)
+    llm: Any = Field(watsonx_llm, exclude=True)
     tools: Optional[List[Any]] = Field(None, exclude=True)
     max_iter:int = Field(3, exclude=True,description="Max number of iterations for the agent to provide a final transduction when using tools.")
     instructions: Optional[str] = Field(
@@ -267,10 +268,10 @@ class Agentics(BaseModel):
         self.states = new_states
         return self
 
-    def reduce(self, func: ReduceStatesType[T]) -> T:
-        return func(self.states)
-        # self.states = output
-        # return self
+    async def areduce(self, func: ReduceStatesType[T]) -> T:
+        output = await func(self.states)
+        self.states = output
+        return self
 
     @classmethod
     def from_states(cls, states: List[BaseModel], atype: BaseModel = None) -> AG:
@@ -345,12 +346,12 @@ class Agentics(BaseModel):
         return cls(states=states, atype=new_type)
 
     @classmethod
-    def from_json(
+    def from_jsonl(
         cls,
         path_to_json_file: str,
         atype: Optional[Type[BaseModel]] = None,
         max_rows: Optional[int] = None,
-        jsonl: bool = False,
+        jsonl: bool = True,
     ) -> AG:
         """
         Import an object of type Agentics from jsonl file.
@@ -818,7 +819,7 @@ class Agentics(BaseModel):
             atype=first.atype, tools=first.tools, states=first.states + other.states
         )
 
-    async def __add__(self, other):
+    def __add__(self, other):
         transducer_class = (
             PydanticTransducerCrewAI
             if type(self.llm) == crewai.LLM
@@ -828,33 +829,33 @@ class Agentics(BaseModel):
             return Agentics(
                 atype=self.atype, tools=self.tools, states=self.states + other.states
             )
-        elif isinstance(other, int):
-            # TODO implement logics for expansion
-            if self.verbose_transduction:
-                logger.debug(
-                    f"Generating {other} synthetic data samples for type {self.atype}"
-                )
-            instructions = (
-                f"""Generate a random entity of the given type:\n{self.atype.model_json_schema()}"""
-                + (
-                    f"""those are samples you can take inspiration from:\n{str(self.states)}"""
-                    if len(self.states) > 0
-                    else ""
-                )
-            )
-            pt = PydanticTransducerCrewAI(
-                self.atype,
-                tools=self.tools,
-                llm=self.llm,
-                verbose=self.verbose_agent,
-                intensional_definiton=instructions,
-            )
-            states = await pt.async_transduce([""], n_samples=other)
-            if type(states[0] == self.atype):
-                self.states += states
-            else:
-                self.states += states[0]
-            return self
+        # elif isinstance(other, int):
+        #     # TODO implement logics for expansion
+        #     if self.verbose_transduction:
+        #         logger.debug(
+        #             f"Generating {other} synthetic data samples for type {self.atype}"
+        #         )
+        #     instructions = (
+        #         f"""Generate a random entity of the given type:\n{self.atype.model_json_schema()}"""
+        #         + (
+        #             f"""those are samples you can take inspiration from:\n{str(self.states)}"""
+        #             if len(self.states) > 0
+        #             else ""
+        #         )
+        #     )
+        #     pt = PydanticTransducerCrewAI(
+        #         self.atype,
+        #         tools=self.tools,
+        #         llm=self.llm,
+        #         verbose=self.verbose_agent,
+        #         intensional_definiton=instructions,
+        #     )
+        #     states = await pt.async_transduce([""], n_samples=other)
+        #     if type(states[0] == self.atype):
+        #         self.states += states
+        #     else:
+        #         self.states += states[0]
+        #     return self
 
         return NotImplemented
 
@@ -955,8 +956,7 @@ class Agentics(BaseModel):
         return pd.DataFrame(data)
 
     def pretty_print(self):
-        output = ""
+        output = f"Atype : {self.atype}\n"
         for state in self.states:
             output += yaml.dump(state.model_dump(), sort_keys=False) + "\n"
-        print(output)
         return output

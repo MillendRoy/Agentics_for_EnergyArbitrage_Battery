@@ -435,3 +435,24 @@ def are_models_structurally_identical(
         #     return False
 
     return True
+
+
+
+def pretty_print_atype(atype, indent: int = 2):
+    """
+    Recursively pretty print an 'atype' (Agentics/Pydantic typing model).
+    Works on generics like list[int], dict[str, float], Optional[...], etc.
+    """
+    prefix = " " * indent
+
+    origin = get_origin(atype)
+    args = get_args(atype)
+
+    if origin is None:
+        # Base case: a plain class/type
+        print(f"{prefix}{atype}")
+    else:
+        print(f"{prefix}{origin.__name__}[")
+        for arg in args:
+            pretty_print_atype(arg, indent + 2)
+        print(f"{prefix}]")

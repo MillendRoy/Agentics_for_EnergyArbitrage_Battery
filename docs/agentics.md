@@ -46,6 +46,7 @@ class Movie(BaseModel):
     description:str
 
 movies = AG(atype=Movie)
+movies.states.append(Movie(title="Superman"))
 print(movies)
 ```
 
@@ -83,7 +84,7 @@ orders = AG.from_csv("data/orders.csv", atype = Order)
 print(orders.atype)
 
 #note that states contains only the attribites in atype, others have been filtered out
-print(orders.states)
+print(orders.pretty_print())
 AG.to_csv("data/orders_filtered.jsonl")
 ```
 
@@ -97,7 +98,7 @@ print(movies.atype)
 
 class MovieReview(Movie):
     review:str
-    quality_score:int = Field(...,description="The quality of the movies in a scale 0 to 10")
+    quality_score:Optional[int] = Field(None,description="The quality of the movies in a scale 0 to 10")
 
 movies.rebind_atype(MovieReview)
 print(movies.states[0])
@@ -110,9 +111,9 @@ You can also modify and rebind an exiting Agentic. Similarly can also remove att
 movies = AG.from_csv("data/orders.csv")
 movies.add_attribute("review",str)
 movies.add_attribute("quality_score",int,description="The quality of the movies in a scale 0 to 10")
-print(movies.states[0])
+print(movies[0])
 movies.subset_atype("title","genre","description")
-print(movies.states[0])
+print(movies[0]) ## note that movies[0] is equivalent to 
 ```
 
 
