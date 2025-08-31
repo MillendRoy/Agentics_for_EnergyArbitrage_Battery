@@ -6,20 +6,15 @@ Welcome to the Agentics tutorial! This guide will introduce you to the core conc
 
 Below is an index of all tutorial notebooks available in this folder. Each entry includes a brief description and a direct link to the notebook.
 
-- **Large Language Models** – Learn how to connect to LLM providers and run simple and structured queries to them. 
-[llms.ipynb](llms.ipynb): 
+- **Large Language Models** – Learn how to connect to LLM providers and run simple and structured queries to them. [llms.ipynb](llms.ipynb): 
 
-- **Agentics basics** – Learn how to create AGs, give them an atype, load , set up your environment, and run your first agent. 
-[agentics_basics.ipynb](agentics_basics.ipynb):  
+- **Agentics basics** – Learn how to create AGs, give them an atype, load , set up your environment, and run your first agent. [agentics_basics.ipynb](agentics_basics.ipynb)
 
-- **Transduction** – Learn how to use logical transduction between agentics.
-[transduction.ipynb](transduction.ipynb): 
+- **Transduction** – Learn how to use logical transduction between agentics. [transduction.ipynb](transduction.ipynb)
 
-- **MCP Tools** – Learn how to run an MCP server with your own tools and use them in agentics.
-[mcp_tools.ipynb](mcp_tools.ipynb):  
+- **MCP Tools** – Learn how to run an MCP server with your own tools and use them in agentics. [mcp_tools.ipynb](mcp_tools.ipynb) 
 
-- **aMap Reduce** – learn how to scale out Agentic workflows using asyncronous map and reduce functions.
-[amap_reduce.ipynb](amap_reduce.ipynb):  
+- **aMap Reduce** – learn how to scale out Agentic workflows using asyncronous map and reduce functions.[amap_reduce.ipynb](amap_reduce.ipynb):  
 
 
 
