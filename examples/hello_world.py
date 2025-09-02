@@ -7,7 +7,7 @@ from agentics import Agentics as AG
 from typing import Optional
 from dotenv import load_dotenv
 import os
-from agentics.core.llm_connections import  available_llms
+from agentics.core.llm_connections import  available_llms, get_llm_provider
 load_dotenv()
 
 ## Define output type
@@ -32,7 +32,7 @@ async def main():
     
     answers = await (AG(atype=Answer, 
                         
-                        llm=available_llms[os.getenv("SELECTED_LLM")], ##Select your LLM from list of available options
+                        llm=get_llm_provider(), ##Select your LLM from list of available options
                         instructions="""Provide an Answer for the following input text 
                         only if it contains an appropriate question that do not contain
                         violent or adult language """

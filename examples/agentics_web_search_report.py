@@ -16,13 +16,6 @@ server_params=StdioServerParameters(
     args=[os.getenv("MCP_SERVER_PATH")],
     env={"UV_PYTHON": "3.12", **os.environ},
 )
-
-class Stock(BaseModel):
-    ticker:str
-    market_value:float
-
-class StockPriceReport(BaseModel):
-    stock_prices : list[Stock]
     
 
 class SearchResult(BaseModel):
@@ -42,7 +35,7 @@ class WebSearchReport(BaseModel):
 with MCPServerAdapter(server_params) as server_tools:
     print(f"Available tools from Stdio MCP server: {[tool.name for tool in server_tools]}")
    
-    results = asyncio.run(AG(atype=StockPriceReport,
+    results = asyncio.run(AG(atype=WebSearchReport,
                             tools = server_tools, 
                             max_iter=10,
                             verbose_transduction=True,

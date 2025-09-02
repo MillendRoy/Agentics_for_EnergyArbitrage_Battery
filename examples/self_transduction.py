@@ -6,7 +6,7 @@ from typing import Optional
 from pydantic import BaseModel
 from agentics import Agentics as AG
 from dotenv import load_dotenv
-from agentics.core.llm_connections import openai_llm, ollama_llm, watsonx_llm
+from agentics.core.llm_connections import get_llm_provider
 import os
 
 load_dotenv()
@@ -14,10 +14,10 @@ load_dotenv()
 async def main():   
     ## Step 1. Load the Dataset
     movies = AG.from_csv(
-        os.path.join(os.getcwd(), "agentics/data/categorization_example/movies.csv"),
+        "data/categorization_example/movies.csv",
         max_rows=10,
         )
-    movies.llm = watsonx_llm
+    movies.llm = get_llm_provider()
     ## Step 2. add attribute tweet to be used as a target for transduction
     extended_movies = movies.add_attribute("tweet", slot_type="str", description="Tweet used to advertise the movie")
 
