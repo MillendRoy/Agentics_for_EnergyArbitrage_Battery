@@ -16,7 +16,7 @@ server_params=StdioServerParameters(
     args=[os.getenv("MCP_SERVER_PATH")],
     env={"UV_PYTHON": "3.12", **os.environ},
 )
-
+    
 
 class SearchResult(BaseModel):
     title: Optional[str]
@@ -39,6 +39,6 @@ with MCPServerAdapter(server_params) as server_tools:
                             tools = server_tools, 
                             max_iter=10,
                             verbose_transduction=True,
-                            description="Answer the input question with a detailed report answering several aspects of the question ",
-                            llm=available_llms["watsonx"]) <<[input("AG>   Ask me anything and I'll search it for you\nUSER> ")])
+                            description="Extract stock market price for the input day ",
+                            llm=available_llms["watsonx"]) <<[input("AG>   Day\nUSER> ")])
     print(results.pretty_print())

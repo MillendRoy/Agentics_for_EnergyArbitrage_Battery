@@ -2,7 +2,7 @@ from crewai_tools import MCPServerAdapter
 from mcp import StdioServerParameters # For Stdio Server
 import os
 from crewai import Agent, Task, Crew
-from agentics.core.llm_connections import available_llms
+from agentics.core.llm_connections import get_llm_provider
 
 
 server_params=StdioServerParameters(
@@ -26,7 +26,7 @@ with MCPServerAdapter(server_params) as server_tools:
         reasoning_steps=2,
         #memory=True,
         verbose=True,
-        llm=available_llms["watsonx"]
+        llm=get_llm_provider()
     )
 
     doc_task = Task(
@@ -46,5 +46,5 @@ with MCPServerAdapter(server_params) as server_tools:
         verbose=True,
     )
 
-    result = crew.kickoff(inputs={"question": input("Ask your question") })
+    result = crew.kickoff(inputs={"question": input("Ask your question> ") })
     print("\nFinal Output:\n", result)
