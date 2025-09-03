@@ -2469,6 +2469,24 @@ files = [
 ]
 
 [[package]]
+name = "json-schema-to-pydantic"
+version = "0.3.0"
+description = "A Python library for automatically generating Pydantic v2 models from JSON Schema definitions"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "json_schema_to_pydantic-0.3.0-py3-none-any.whl", hash = "sha256:0c44df2c07f2d5968caa2c716475892a2c0e088e95cfb6c4dd620757f3671e38"},
+    {file = "json_schema_to_pydantic-0.3.0.tar.gz", hash = "sha256:5505a015a832f13953d142c6a415fb2b00cb61d98e2457006c30c928fb50e402"},
+]
+
+[package.dependencies]
+pydantic = ">=2.10.4"
+
+[package.extras]
+dev = ["pytest (>=8.3.4)", "pytest-cov (>=6.0.0)"]
+
+[[package]]
 name = "json5"
 version = "0.12.1"
 description = "A Python implementation of the JSON5 data format."
@@ -7625,7 +7643,6 @@ description = "The lightning-fast ASGI server."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "sys_platform != \"emscripten\""
 files = [
     {file = "uvicorn-0.35.0-py3-none-any.whl", hash = "sha256:197535216b25ff9b785e29a0b79199f55222193d47f820816e7da751e9bc8d4a"},
     {file = "uvicorn-0.35.0.tar.gz", hash = "sha256:bc662f087f7cf2ce11a1d7fd70b90c9f98ef2e2831556dd078d131b96cc94a01"},
@@ -8484,4 +8501,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "6f89ecf2eb9e1b4a7b5c786244045fc849874474f4b45484532f379b47a7108a"
+content-hash = "eab307d1119098eef5cbcb57e58401efd3bd3fd1fae67bcecb08b6a65d61b2fe"
