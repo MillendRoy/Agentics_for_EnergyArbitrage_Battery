@@ -48,6 +48,22 @@ We welcome new AG entusiasts to extend this framework with new applications and 
 **Built-in Support for Tools**: Integrate LangChain tools or custom functions.
 
 
+## Tutorial 
+
+
+[Agentics Basics](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/agentics_basics.ipynb) [source code](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/agentics_basics.ipynb)
+
+[Amap Reduce](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/amap_reduce.ipynb) [source code](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/amap_reduce.ipynb)
+
+[ATypes](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/atypes.ipynb) [source code](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/atypes.ipynb)
+
+[LLMs](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/llms.ipynb) [source code](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/llms.ipynb)
+
+[MCP Tools](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/mcp_tools.ipynb) [source code](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/mcp_tools.ipynb)
+
+[Transduction](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/transduction.ipynb) [source code](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/transduction.ipynb)
+
+
 ## 🚀 Documentation
 
 👉 [Getting Started](docs/getting_started.md): Learn how to install Agentic, set up your environment, and run your first logical transduction.
