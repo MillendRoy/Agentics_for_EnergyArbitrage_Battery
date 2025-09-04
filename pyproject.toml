@@ -1,29 +1,23 @@
 [project]
 name = "agentics-py"
-# name = "agentics"
-# version = "0.1.0"
+#version = "0.0.0"
 dynamic = ["version"]
 description = "Agentics is a Python framework that provides structured, scalable, and semantically grounded agentic computation."
 authors = [
-    {name = "Alfio Gliozzo",email = "gliozzo@us.ibm.com"},
-    {name = "Junkyu Lee",email = "Junkyu.Lee@ibm.com"},
-    {name = "Nahuel Defosse",email = "nahuel.defosse@ibm.com"},
-    {name = "Mustafa Eyceoz",email = "Mustafa.Eyceoz@partner.ibm.com"},
-    {name = "Naweed Aghmad Khan",email = "naweed.khan@ibm.com"},
-     
+    { name = "Alfio Gliozzo", email = "gliozzo@us.ibm.com" },
+    { name = "Junkyu Lee", email = "Junkyu.Lee@ibm.com" },
+    { name = "Nahuel Defosse", email = "nahuel.defosse@ibm.com" },
+    { name = "Mustafa Eyceoz", email = "Mustafa.Eyceoz@partner.ibm.com" },
+    { name = "Naweed Aghmad Khan", email = "naweed.khan@ibm.com" },
 ]
-
-license = "Apache-2.0"
-readme = "README.md"
 requires-python = ">=3.11,<3.13"
+readme = "README.md"
+license = "Apache-2.0"
 dependencies = [
     "ddgs",
     "pydantic",
     "crewai",
     "crewai-tools[mcp]",
-    "mkdocs (>=1.6.1,<2.0.0)",
-    "mkdocstrings (>=0.29.1,<0.30.0)",
-    "mkdocs-material (>=9.6.14,<10.0.0)",
     "langchain-huggingface (>=0.2.0,<0.3.0)",
     "openapi-python-client (>=0.24.3,<0.25.0)",
     "streamlit (>=1.45.1,<2.0.0)",
@@ -37,38 +31,43 @@ dependencies = [
     "mcp (>=1.13.1,<2.0.0)",
 ]
 
+[tool.uv]
+package = true
 
-[tool.poetry]
-packages = [
-  { include = "agentics", from = "src" },
-  # { include = "memory_backend_client", from = "src/lib/memory/memory-backend-client"},
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentics"]
+
+
+[dependency-groups]
+dev = [
+  "pytest >=8.4.0,<9",
+  "black >=25.1.0,<26",
+  "isort >=6.0.1,<7",
+  "pre-commit >=4.2.0,<5",
+  "pdbpp >=0.11.6,<1",
+  "pytest-asyncio >=1.0.0,<2",
+  "pytest-html >=4.1.1,<5",
+  "invoke>=2.2.0",
 ]
-version = "0.0.0"
+docling = [
+  "langchain-docling >=0.2.0,<0.3.0"
+]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.18",
+    "mkdocstrings>=0.30.0",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.4.0"
-black = "^25.1.0"
-isort = "^6.0.1"
-pre-commit = "^4.2.0"
-pdbpp = "^0.11.6"
-pytest-asyncio = "^1.0.0"
-pytest-html = "^4.1.1"
-
-# [tool.poetry.group.docling.dependencies]
-# langchain-docling = ">=0.2.0,<0.3.0"
 
 [tool.isort]
 profile = "black"
-
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.requires-plugins]
-poetry-dynamic-versioning = { version = ">=1.0.0,<2.0.0", extras = ["plugin"] }
-
-[tool.poetry-dynamic-versioning]
-enable = true
 
 
 [tool.pytest.ini_options]
@@ -77,6 +76,16 @@ testpaths = ["tests"]
 # i.e.: db2 docker instances
 addopts = "--html=report.html --self-contained-html"
 
-
 [tool.codespell]
 ignore-words-list = "ans"
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu" },
+]
