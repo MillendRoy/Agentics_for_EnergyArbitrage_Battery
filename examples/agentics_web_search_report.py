@@ -6,6 +6,7 @@ from agentics.core.llm_connections import available_llms
 from pydantic import BaseModel, Field
 from typing import Optional
 from dotenv import load_dotenv
+
 import asyncio
 
 load_dotenv()
@@ -38,7 +39,7 @@ with MCPServerAdapter(server_params) as server_tools:
     results = asyncio.run(AG(atype=WebSearchReport,
                             tools = server_tools, 
                             max_iter=10,
-                            verbose_transduction=True,
+                            verbose_agent=True,
                             description="Extract stock market price for the input day ",
                             llm=available_llms["watsonx"]) <<[input("AG>   Day\nUSER> ")])
     print(results.pretty_print())
