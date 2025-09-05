@@ -68,8 +68,6 @@ We welcome new AG entusiasts to extend this framework with new applications and 
 
 🔁 [Transduction](docs/transduction.md): Discover how the `<<` operator implements logical transduction between types and how to control its behavior.
 
-🧬 [Memory](docs/memory.md): Leverage external knowledge from documents to enhance transduction.
-
 🛠️ [Tools](docs/tools.md): Learn how to integrate external tools (e.g., LangChain, CrewAI) to provide access to external data necessary for logical transduction.
 
 ## 📘 Example Usage
@@ -133,8 +131,14 @@ Full documentation and examples are available at:
 
 Run all tests using:
 
-`pytest`
+`uv run pytest`
 
+
+# Examples
+
+Run all scripts in example folder using uv
+
+`uv run python examples/hello_world.py`
 
 ## $ 📄 License
 
