@@ -50,19 +50,15 @@ We welcome new AG entusiasts to extend this framework with new applications and 
 
 ## Tutorial 
 
+| Notebook |   Description |
+|----------| --------------- |
+| [LLMs](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/llms.ipynb) | Basics |
+| [Agentic Basics](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/agentics_basics.ipynb)         | Step by step guide illustrating how to make a new AG, access and print its content, import and export it to files            | 
+|[Transduction](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/transduction.ipynb) | Demonstrate the use of logical transduction  (`<<`) in Agentics |
+| [Amap Reduce](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/amap_reduce.ipynb) | Try out MapReduce in Agentics to scale out |
+| [MCP Tools](./tutorials/mcp_tools.ipynb) | |
 
-[Agentics Basics](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/agentics_basics.ipynb) [source code](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/agentics_basics.ipynb)
-
-[Amap Reduce](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/amap_reduce.ipynb) [source code](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/amap_reduce.ipynb)
-
-[ATypes](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/atypes.ipynb) [source code](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/atypes.ipynb)
-
-[LLMs](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/llms.ipynb) [source code](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/llms.ipynb)
-
-[MCP Tools](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/mcp_tools.ipynb) [source code](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/mcp_tools.ipynb)
-
-[Transduction](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/transduction.ipynb) [source code](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/transduction.ipynb)
-
+<!-- | [ATypes](https://colab.research.google.com/github/IBM/Agentics/blob/main/tutorials/atypes.ipynb) | | -->
 
 ## 🚀 Documentation
 
@@ -71,8 +67,6 @@ We welcome new AG entusiasts to extend this framework with new applications and 
 🧠 [Agentics](docs/agentics.md): Explore how Agentics wraps `pydantic` models into transduction-ready agents. 
 
 🔁 [Transduction](docs/transduction.md): Discover how the `<<` operator implements logical transduction between types and how to control its behavior.
-
-🧬 [Memory](docs/memory.md): Leverage external knowledge from documents to enhance transduction.
 
 🛠️ [Tools](docs/tools.md): Learn how to integrate external tools (e.g., LangChain, CrewAI) to provide access to external data necessary for logical transduction.
 
@@ -137,8 +131,14 @@ Full documentation and examples are available at:
 
 Run all tests using:
 
-`pytest`
+`uv run pytest`
 
+
+# Examples
+
+Run all scripts in example folder using uv
+
+`uv run python examples/hello_world.py`
 
 ## $ 📄 License
 

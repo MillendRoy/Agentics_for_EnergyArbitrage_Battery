@@ -1,6 +1,6 @@
 [project]
 name = "agentics-py"
-#version = "0.0.0"
+# version = "0.0.8"
 dynamic = ["version"]
 description = "Agentics is a Python framework that provides structured, scalable, and semantically grounded agentic computation."
 authors = [
@@ -16,7 +16,7 @@ license = "Apache-2.0"
 dependencies = [
     "ddgs",
     "pydantic",
-    "crewai",
+    "crewai[tools]",
     "crewai-tools[mcp]",
     "langchain-huggingface (>=0.2.0,<0.3.0)",
     "openapi-python-client (>=0.24.3,<0.25.0)",
@@ -29,6 +29,8 @@ dependencies = [
     "loguru (>=0.7.3,<0.8.0)",
     "datasets (>=4.0.0,<5.0.0)",
     "mcp (>=1.13.1,<2.0.0)",
+    "google (>=3.0.0,<4.0.0)",
+    "ipywidgets>=8.1.7",
 ]
 
 [tool.uv]
@@ -55,6 +57,7 @@ dev = [
   "pytest-asyncio >=1.0.0,<2",
   "pytest-html >=4.1.1,<5",
   "invoke>=2.2.0",
+  "papermill>=2.6.0",
 ]
 docling = [
   "langchain-docling >=0.2.0,<0.3.0"
