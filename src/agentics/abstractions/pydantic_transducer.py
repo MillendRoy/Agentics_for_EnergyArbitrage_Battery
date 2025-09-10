@@ -23,6 +23,8 @@ class Transducer(ABC):
     max_retries = 5
     _retry: int = 0
 
+    model_config = {"arbitrary_types_allowed": True}
+
     @abstractmethod
     async def transduce(
         self, input: Union[str, Iterable[str]], *args, **kwargs

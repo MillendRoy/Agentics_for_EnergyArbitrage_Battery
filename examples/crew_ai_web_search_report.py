@@ -1,3 +1,5 @@
+"""required: export MCP_SERVER_PATH mcp/DDG_search_tool_mcp.py"""
+
 import os
 
 from crewai import Agent, Crew, Task
