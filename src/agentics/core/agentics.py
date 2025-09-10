@@ -130,7 +130,7 @@ class Agentics(BaseModel, Generic[T]):
         None,
         description="""this is the list of field that will be used for the transduction, both incoming and outcoming""",
     )
-    llm: Any = Field(get_llm_provider(), exclude=True)
+    llm: Any = Field(default_factory=get_llm_provider, exclude=True)
     tools: Optional[List[Any]] = Field(None, exclude=True)
     max_iter: int = Field(
         3,
