@@ -202,8 +202,8 @@ class Agentics(BaseModel, Generic[T]):
         if self.verbose_transduction:
             logger.debug(f"Executing amap on function {func}")
 
+        begin_time = time.time()
         try:
-            begin_time = time.time()
             tasks = []
             for state in self.states:
                 corutine = asyncio.wait_for(func(state), timeout=300)
@@ -214,15 +214,16 @@ class Agentics(BaseModel, Generic[T]):
                     for state in results:
                         f.write(state.model_dump_json() + "\n")
 
-            end_time = time.time()
-            if self.verbose_transduction:
-                logger.debug(
-                    f"{len(self)} states processed. {(end_time - begin_time) / len(self): 0.4f} seconds average per state in the last chunk ..."
-                )
         except Exception as e:
             if self.verbose_transduction:
                 logger.debug(str(e))
             results = self.states
+
+        end_time = time.time()
+        if self.verbose_transduction:
+            logger.debug(
+                f"{len(self.states)} states processed. {(end_time - begin_time) / len(self.states): 0.4f} seconds average per state"
+            )
 
         _states = []
         n_errors = 0
