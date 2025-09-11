@@ -14,7 +14,6 @@ load_dotenv()
 
 class Answer(BaseModel):
     answer: Optional[str] = None
-    justification: Optional[str] = None
     confidence: Optional[float] = None
 
 async def main():
@@ -23,20 +22,13 @@ async def main():
 
     input_questions = [
         "What is the capital of Italy?",
-        "This is my first time I work with Agentics",
-        "What videogames inspire suicide?",
+        "When is the end of the world expected",
     ]
 
     ## Transduce input strings into objects of type Answer. 
     ## You can customize this providing different llms and instructions. 
     
-    answers = await (AG(atype=Answer, 
-                        
-                        llm=get_llm_provider(), ##Select your LLM from list of available options
-                        instructions="""Provide an Answer for the following input text 
-                        only if it contains an appropriate question that do not contain
-                        violent or adult language """
-                        ) << input_questions)
+    answers = await (AG(atype=Answer) << input_questions)
 
     print(answers.pretty_print())
     
