@@ -139,7 +139,7 @@ class Agentics(BaseModel):
     )
     llm: Any = Field(get_llm_provider(), exclude=True)
     tools: Optional[List[Any]] = Field(None, exclude=True)
-    max_iter:int = Field(3, exclude=True,description="Max number of iterations for the agent to provide a final transduction when using tools.")
+    max_iter:int = Field(3, exclude=False,description="Max number of iterations for the agent to provide a final transduction when using tools.")
     instructions: Optional[str] = Field(
         """Generate an object of the specified type from the following input.""",
         description="Special instructions to be given to the agent for executing transduction",
@@ -166,6 +166,7 @@ class Agentics(BaseModel):
         None,
         description="""If not null, the specified file will be created and used to save the intermediate results of transduction from each batch. The file will be updated in real time and can be used for monitoring""",
     )
+    reasoning:Optional[bool] = None
     batch_size: Optional[int] = 20
     verbose_transduction: bool = True
     verbose_agent: bool = False
@@ -666,7 +667,7 @@ class Agentics(BaseModel):
                     llm=self.llm,
                     intensional_definiton=instructions,
                     verbose=self.verbose_agent,
-                    max_iter=self.max_iter
+                    max_iter=self.max_iter,
                     **self.crew_prompt_params,
                 )
                 for state in chunk:

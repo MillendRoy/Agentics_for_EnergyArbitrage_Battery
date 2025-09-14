@@ -116,6 +116,7 @@ class PydanticTransducerCrewAI:
         tools=None,
         intensional_definiton=None,
         max_iter=max_iter,
+        reasoning=False,
         **kwargs,
     ):
         self.atype = atype
@@ -139,6 +140,8 @@ class PydanticTransducerCrewAI:
             verbose=verbose,
             max_iter=max_iter,
             llm=self.llm,
+            reasoning=reasoning,
+            max_reasoning_attempts=4,
             tools=tools if tools else [],
         )
         task = Task(
