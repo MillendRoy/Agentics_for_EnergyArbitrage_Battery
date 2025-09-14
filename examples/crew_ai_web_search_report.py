@@ -44,7 +44,7 @@ with MCPServerAdapter(fetch_params) as fetch_tools, \
         goal="Find answers to questions from the user using the available MCP tool.",
         backstory="A helpful assistant for extensive web search reports.",
         tools=tools,
-        reasoning=True, ## when reasoning is true a plan is generated
+        reasoning=False, ## when reasoning is true a plan is generated
         reasoning_steps=10, ## maximum number of steps that will be executed in the plan
         memory=True, ## Set true to provide context of conversation
         verbose=True,

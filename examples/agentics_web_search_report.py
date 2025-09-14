@@ -40,6 +40,6 @@ with MCPServerAdapter(server_params) as server_tools:
                             tools = server_tools, 
                             max_iter=10,
                             verbose_agent=True,
-                            description="Extract stock market price for the input day ",
+                            #description="Extract stock market price for the input day ",
                             llm=available_llms["watsonx"]) <<[input("USER> ")])
     print(results.pretty_print())
