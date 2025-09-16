@@ -10,7 +10,7 @@ from openai import AsyncOpenAI
 load_dotenv()
 
 
-def get_llm_provider(provider_name: str = None) -> LLM:
+def get_llm_provider(provider_name: str = "") -> LLM:
     """
     Retrieve the LLM instance based on the provider name. If no provider name is given,
     the function returns the first available LLM.
@@ -25,7 +25,7 @@ def get_llm_provider(provider_name: str = None) -> LLM:
         ValueError: If the specified provider is not available.
     """
 
-    if provider_name is None:
+    if provider_name == "":
         logger.debug("No LLM provider specified. Using the first available provider.")
         if len(available_llms) > 0:
             logger.debug(
@@ -33,7 +33,7 @@ def get_llm_provider(provider_name: str = None) -> LLM:
             )
             return list(available_llms.values())[0]
         else:
-            raise ValueError(
+            logger.debug(
                 "No LLM is available. Please check your .env configuration."
             )
 

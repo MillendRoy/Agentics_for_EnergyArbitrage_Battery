@@ -15,25 +15,22 @@ from typing import (
     Optional,
     Type,
     TypeVar,
-    Union,
+    Union
 )
-
 import crewai
 import pandas as pd
 import yaml
 from langchain_core.prompts import PromptTemplate
 from loguru import logger
 from pandas import DataFrame
-from pydantic import BaseModel, Field, conlist, create_model
+from pydantic import BaseModel, Field, create_model
 
 from agentics.abstractions.pydantic_transducer import (
     PydanticTransducerCrewAI,
     PydanticTransducerVLLM,
 )
+from agentics.core.llm_connections import get_llm_provider, available_llms
 from agentics.abstractions.structured_output import generate_structured_output
-
-# from agentics.core.globals import Memory
-from agentics.core.llm_connections import get_llm_provider
 from agentics.core.utils import (
     are_models_structurally_identical,
     chunk_list,
@@ -45,12 +42,10 @@ from agentics.core.utils import (
     pydantic_model_from_dict,
     pydantic_model_from_jsonl,
     remap_dict_keys,
-    sanitize_dict_keys,
-    pretty_print_atype
+    sanitize_dict_keys
 )
-
-# memory = Memory()
-
+from agentics.core.mapping import AttributeMapping, ATypeMapping
+from crewai import LLM
 
 T = TypeVar("T", bound=BaseModel)
 ReduceStatesType = Callable[[List[T]], T]
@@ -72,51 +67,10 @@ class TransductionError(AgenticsError):
 
 from enum import Enum
 
-
-class AttributeMapping(BaseModel):
-    """Generate a mapping from the source field in the source schema to the target attributes or the target schema"""
-
-    target_field: str = Field(
-        ..., description="The attribute of the source target that has to be mapped"
-    )
-
-    source_field: Optional[str] = Field(
-        [],
-        description="A list of attributes from the source type that can be used as an input for a function transforming them into the target taype. Empty list if none of them apply",
-    )
-    explanation: Optional[str] = Field(
-        None, description="""reasons why you identified this mapping"""
-    )
-    confidence: Optional[float] = Field(
-        0, description="""Confidence level for your suggested mapping"""
-    )
+AG = TypeVar("A", bound="AG")
 
 
-class AttributeMappings(BaseModel):
-    attribute_mappings: Optional[List[AttributeMapping]] = []
-
-
-class ATypeMapping(BaseModel):
-    source_atype: Optional[Union[Type[BaseModel], str]] = None
-    target_atype: Optional[Union[Type[BaseModel], str]] = None
-    attribute_mappings: Optional[List[AttributeMapping]] = Field(
-        None, description="List of Attribute Mapping objects"
-    )
-    source_dict: Optional[dict] = Field(
-        None, description="The Json schema of the source type"
-    )
-    target_dict: Optional[dict] = Field(
-        None, description="The Json schema of the target type"
-    )
-    source_file: Optional[str] = None
-    target_file: Optional[str] = None
-    mapping: Optional[dict] = Field(None, description="Ground Truth mappings")
-
-
-AG = TypeVar("A", bound="Agentics")
-
-
-class Agentics(BaseModel):
+class AG(BaseModel):
     """
     Agentics is a Python class that wraps a list of Pydantic objects and enables structured, type-driven logical transduction between them.
 
@@ -176,6 +130,15 @@ class Agentics(BaseModel):
         from crewai import LLM
 
         return LLM(**kwargs)
+    
+    @classmethod
+    def get_llm_provider(cls, provider_name: str = "list") -> Union[LLM, dict[str, LLM]]:
+        if provider_name == "list":
+            return available_llms
+        if provider_name in available_llms:
+            return available_llms[provider_name]
+        raise ValueError(f"Unknown provider: {provider_name}")
+
 
     ### Turn agentics into lists iterating on the states
     def __iter__(self):
@@ -224,9 +187,6 @@ class Agentics(BaseModel):
                             f.write(state.model_dump_json() + "\n")
 
                 results += result_run
-
-                # pt = PydanticTransducer(self.subset_atype(self.transduce_fields) if self.transduce_fields else self.atype, tools=self.tools, llm=self.llm, intensional_definiton=intensional_definition, verbose=self.verbose)
-                # _states+= await pt.async_transduce(chunk)
                 end_time = time.time()
                 if self.verbose_transduction:
                     logger.debug(
@@ -247,9 +207,6 @@ class Agentics(BaseModel):
                     logger.debug(e)
 
                 results += chunk
-
-        # tasks = [func(state) for state in self.states]
-        # results = await asyncio.gather(*tasks, return_exceptions=True)
 
         new_states = []
         for i, result in enumerate(results):
@@ -286,7 +243,7 @@ class Agentics(BaseModel):
                 if atype != type(state):
                     wrong_state = state
             if not wrong_state:
-                return Agentics(atype=atype, states=states)
+                return AG(atype=atype, states=states)
             else:
                 raise InvalidStateError(
                     f"Expected {atype} for object {wrong_state.model_dump_json}"
@@ -298,8 +255,7 @@ class Agentics(BaseModel):
         csv_file,
         atype: Type[BaseModel] = None,
         max_rows: int = None,
-        task_description: str = None,
-        verbose=False,
+        task_description: str = None
     ) -> AG:
         """
         Import an object of type Agentics from a CSV file.
@@ -492,7 +448,7 @@ class Agentics(BaseModel):
         """
         for src, target in source_target_pairs:
             func = partial(
-                Agentics.copy_attribute_values,
+                AG.copy_attribute_values,
                 source_attribute=src,
                 target_attribute=target,
             )
@@ -514,7 +470,7 @@ class Agentics(BaseModel):
             if self.transduce_fields
             else self.atype
         )
-        if isinstance(other, Agentics):
+        if isinstance(other, AG):
             if self.verbose_transduction:
                 logger.debug(
                     f"Executing task: {self.instructions}\n{len(other.states)} states will be transduced"
@@ -703,7 +659,7 @@ class Agentics(BaseModel):
                 )
             i += 1
 
-        if isinstance(other, Agentics):
+        if isinstance(other, AG):
             for i in range(len(other.states)):
                 output_state = output_states[i]
                 if isinstance(output_state, tuple):
@@ -788,7 +744,7 @@ class Agentics(BaseModel):
             ]
             extended_ags.append(extended_ag)
 
-        return reduce((lambda x, y: Agentics.add_states(x, y)), extended_ags)
+        return reduce((lambda x, y: AG.add_states(x, y)), extended_ags)
 
     def quotient(self, other: AG) -> list[AG]:
         """
@@ -815,7 +771,7 @@ class Agentics(BaseModel):
 
     @staticmethod
     def add_states(first: AG, other: AG) -> AG:
-        return Agentics(
+        return AG(
             atype=first.atype, tools=first.tools, states=first.states + other.states
         )
 
@@ -825,46 +781,20 @@ class Agentics(BaseModel):
             if type(self.llm) == crewai.LLM
             else PydanticTransducerVLLM
         )
-        if isinstance(other, Agentics):
-            return Agentics(
+        if isinstance(other, AG):
+            return AG(
                 atype=self.atype, tools=self.tools, states=self.states + other.states
             )
-        # elif isinstance(other, int):
-        #     # TODO implement logics for expansion
-        #     if self.verbose_transduction:
-        #         logger.debug(
-        #             f"Generating {other} synthetic data samples for type {self.atype}"
-        #         )
-        #     instructions = (
-        #         f"""Generate a random entity of the given type:\n{self.atype.model_json_schema()}"""
-        #         + (
-        #             f"""those are samples you can take inspiration from:\n{str(self.states)}"""
-        #             if len(self.states) > 0
-        #             else ""
-        #         )
-        #     )
-        #     pt = PydanticTransducerCrewAI(
-        #         self.atype,
-        #         tools=self.tools,
-        #         llm=self.llm,
-        #         verbose=self.verbose_agent,
-        #         intensional_definiton=instructions,
-        #     )
-        #     states = await pt.async_transduce([""], n_samples=other)
-        #     if type(states[0] == self.atype):
-        #         self.states += states
-        #     else:
-        #         self.states += states[0]
-        #     return self
+        
 
         return NotImplemented
+
+
 
     async def map_atypes(self, other: AG) -> ATypeMapping:
         if self.verbose_agent:
             logger.debug(f"Mapping type {other.atype} into type {self.atype}")
 
-        # target_schema_dict= self.atype.model_json_schema()
-        # source_schema_dict= other.atype.model_json_schema()
         target_attributes = []
         for target_attribute in self.atype.model_fields.items():
             target_attributes.append(
@@ -876,7 +806,7 @@ class Agentics(BaseModel):
                 + str(other.atype.model_json_schema())
             )
 
-        mappings = Agentics(atype=AttributeMapping)
+        mappings = AG(atype=AttributeMapping)
         mappings.instructions = f"""Map the TARGET_ATTRIBUTE to the right attribute of in the SOURCE_SCHEMA"""
         output = await (mappings << target_attributes)
         return ATypeMapping(
@@ -891,7 +821,7 @@ class Agentics(BaseModel):
 
         target_schema_dict = self.atype.model_json_schema()
         source_schema_dict = other.atype.model_json_schema()["properties"]
-        mappings = Agentics(atype=ATypeMapping, transduce_fields=["attribute_mappings"])
+        mappings = AG(atype=ATypeMapping, transduce_fields=["attribute_mappings"])
         mappings.instructions = f"""provide each attribute mapping from the SOURCE schema to zero or more attributes of the TARGET schema, providing a pydantic output as instructed"""
         output = await (
             mappings

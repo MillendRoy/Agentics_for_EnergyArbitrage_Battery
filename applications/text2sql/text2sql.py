@@ -11,10 +11,10 @@ import random
 sys.path.append(str(Path(__file__).resolve().parent))
 from utils import get_schema, async_execute_sql, evaluate_execution_accuracy
 from crewai.tools import tool
-from agentics import Agentics as AG
+from agentics import AG
 from agentics.core.llm_connections import get_llm_provider
 from crewai_tools import MCPServerAdapter
-from agentics import Agentics as AG
+from agentics import AG
 
 load_dotenv(find_dotenv())
 begin_time=time.time()
@@ -48,12 +48,6 @@ async def execute_sql_query(sql_query:str, db_id:str)-> str:
     return system_output_df 
 
 
-server_params=StdioServerParameters(
-    command="uvx",
-    args=["mcp-server-calculator"],
-    env={"UV_PYTHON": "3.12", **os.environ},
-)
-
 async def execute_query_map(state:Text2sqlQuestion)-> Text2sqlQuestion:
     schema_path = os.path.join(os.getenv("SQL_DB_PATH"), 
                             state.db_id,state.db_id+".sqlite" )
@@ -84,7 +78,7 @@ async def execute_questions(test:AG, few_shots_path:str = None):
     ## add training data
     test.states= training.states+test.states
     test= await test.amap(get_schema_map)
-    test.verbose_agent=False
+    test.verbose_agent=True
 
 
     test = await test.self_transduction(
@@ -112,7 +106,8 @@ async def run_evaluation_benchmark(path: str="/Users/gliozzo/Data/Text2SQL/bird/
     
 
 
-asyncio.run(run_evaluation_benchmark())
+asyncio.run(run_evaluation_benchmark(max_rows=10))
+
 # print( asyncio.run(execute_questions(
 #     AG(atype=Text2sqlQuestion, states=[Text2sqlQuestion(
 #         question= "What is the highest eligible free rate for K-12 students in the schools in Alameda County?", 
