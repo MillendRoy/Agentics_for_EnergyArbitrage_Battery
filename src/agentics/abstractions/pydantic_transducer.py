@@ -55,7 +55,6 @@ class PydanticTransducerVLLM:
         n_samples: int = 1,
         **kwargs,
     ) -> list[list[BaseModel]]:
-
         default_user_prompt = "\n".join(
             [
                 self.intensional_definiton,
@@ -116,6 +115,7 @@ class PydanticTransducerCrewAI:
         tools=None,
         intensional_definiton=None,
         max_iter=max_iter,
+        reasoning=False,
         **kwargs,
     ):
         self.atype = atype
@@ -139,6 +139,8 @@ class PydanticTransducerCrewAI:
             verbose=verbose,
             max_iter=max_iter,
             llm=self.llm,
+            reasoning=reasoning,
+            max_reasoning_attempts=4,
             tools=tools if tools else [],
         )
         task = Task(
@@ -169,7 +171,7 @@ class PydanticTransducerCrewAI:
             return ans.pydantic
         elif isinstance(input, Iterable) and all(isinstance(i, str) for i in input):
             input_states = [
-                {"task_description": x[:self.MAX_CHAR_PROMPT]} for x in input
+                {"task_description": x[: self.MAX_CHAR_PROMPT]} for x in input
             ]
             answer_list = await self.crew.kickoff_for_each_async(input_states)
 
