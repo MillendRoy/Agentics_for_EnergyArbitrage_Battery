@@ -12,7 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parent))
 from utils import get_schema, async_execute_sql, evaluate_execution_accuracy
 from crewai.tools import tool
 from agentics import AG
-from agentics.core.llm_connections import get_llm_provider
+
 from crewai_tools import MCPServerAdapter
 from agentics import AG
 
@@ -71,7 +71,7 @@ async def execute_questions(test:AG, few_shots_path:str = None):
     training = AG(atype=Text2sqlQuestion)
     if few_shots_path:
         training = get_training_data(few_shots_path)
-    test.llm=get_llm_provider("watsonx")
+    test.llm=AG.get_llm_provider("watsonx")
     test.reasoning=False
     test.tools=[execute_sql_query]
     test.max_iter=10

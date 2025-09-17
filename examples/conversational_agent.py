@@ -1,11 +1,10 @@
 from crewai import Agent, Task, Crew, Process
-
+from agentics import AG
 from crewai.tools import tool
 from ddgs import DDGS
 from crewai_tools import MCPServerAdapter
 from mcp import StdioServerParameters # For Stdio Server
 import os
-from agentics.core.llm_connections import get_llm_provider
 
 ## Connect to MCP servers.
 
@@ -52,7 +51,7 @@ with MCPServerAdapter(server_params_search) as server_search , \
         backstory="You are a friendly assistant that remembers context and asks for clarification when needed.",
         memory=True , # enable memory for conversational context
         #reasoning=True,
-        llm=get_llm_provider("openai"), ## OpenAI is reccomended for agents using multiple tools 
+        llm=AG.get_llm_provider(), ## OpenAI is reccomended for agents using multiple tools 
     )
 
     # Define a simple Task that represents a single AI response

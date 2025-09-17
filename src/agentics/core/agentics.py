@@ -132,7 +132,9 @@ class AG(BaseModel):
         return LLM(**kwargs)
     
     @classmethod
-    def get_llm_provider(cls, provider_name: str = "list") -> Union[LLM, dict[str, LLM]]:
+    def get_llm_provider(cls, provider_name: str = "first") -> Union[LLM, dict[str, LLM]]:
+        if provider_name == "first":
+            return  next(iter(available_llms.values()), None) if len(available_llms)>0 else None
         if provider_name == "list":
             return available_llms
         if provider_name in available_llms:

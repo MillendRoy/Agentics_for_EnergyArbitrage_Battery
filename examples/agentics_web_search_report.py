@@ -1,8 +1,7 @@
-from agentics import Agentics as AG
+from agentics import AG
 from crewai_tools import MCPServerAdapter
 from mcp import StdioServerParameters # For Stdio Server
 import os
-from agentics.core.llm_connections import available_llms
 from pydantic import BaseModel, Field
 from typing import Optional
 from dotenv import load_dotenv
@@ -41,5 +40,5 @@ with MCPServerAdapter(server_params) as server_tools:
                             max_iter=10,
                             verbose_agent=True,
                             #description="Extract stock market price for the input day ",
-                            llm=available_llms["watsonx"]) <<[input("USER> ")])
+                            llm=AG.get_llm_provider("watsonx")) <<[input("USER> ")])
     print(results.pretty_print())

@@ -3,11 +3,10 @@
 
 import asyncio
 from pydantic import BaseModel
-from agentics import Agentics as AG
+from agentics import AG
 from typing import Optional
 from dotenv import load_dotenv
 import os
-from agentics.core.llm_connections import  available_llms, get_llm_provider
 load_dotenv()
 
 ## Define output type
@@ -33,6 +32,6 @@ async def main():
     print(answers.pretty_print())
     
 if __name__ == "__main__":
-    if len(available_llms)>0:
+    if AG.get_llm_provider():
         asyncio.run(main())
     else: print("Please set API key in your .env file.")
