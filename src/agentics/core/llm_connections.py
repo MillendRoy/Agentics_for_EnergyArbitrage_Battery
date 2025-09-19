@@ -26,14 +26,15 @@ def get_llm_provider(provider_name: str = None) -> LLM:
     """
 
     if provider_name is None or provider_name == "":
-        logger.debug("No LLM provider specified. Using the first available provider.")
         if len(available_llms) > 0:
             logger.debug(
-                f"Available LLM providers: {list(available_llms.keys())}. Using '{list(available_llms.keys())[0]}'"
+                f"Available LLM providers: {list(available_llms)}. None specified, defaulting to '{list(available_llms)[0]}'"
             )
             return list(available_llms.values())[0]
         else:
-            logger.debug("No LLM is available. Please check your .env configuration.")
+            raise ValueError(
+                "No LLM is available. Please check your .env configuration."
+            )
 
     else:
         if provider_name in available_llms:
@@ -116,18 +117,12 @@ vllm_crewai = (
     else None
 )
 
-logger.debug("AGENTICS is connecting to the following LLM API providers:")
 i = 0
 if watsonx_llm:
-    logger.debug(f"{i} - WatsonX")
     available_llms["watsonx"] = watsonx_llm
     i += 1
 if gemini_llm:
     available_llms["gemini"] = gemini_llm
-    logger.debug(f"{i} - Gemini")
     i += 1
 if openai_llm:
     available_llms["openai"] = openai_llm
-    logger.debug(f"{i} - OpenAI")
-
-logger.debug("Please add API keys in .env file to add or disconnect providers.")
