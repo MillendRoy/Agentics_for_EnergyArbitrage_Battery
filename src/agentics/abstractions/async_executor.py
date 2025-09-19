@@ -3,7 +3,7 @@ import json
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from typing import Any, Optional, Type, Union
+from typing import Any, Callable, List, Optional, Type, Union
 
 from crewai import Agent, Crew, Process, Task
 from dotenv import load_dotenv
@@ -11,30 +11,99 @@ from loguru import logger
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
-from agentics.core.llm_connections import get_llm_provider
+from agentics.core.llm_connections import watsonx_llm
 from agentics.core.utils import openai_response
 
 load_dotenv()
 
 
-class Transducer(ABC):
+class AsyncExecutor(ABC):
 
     wait: int = 0.01
-    max_retries = 5
+    max_retries: int = 5
+    timeout: int | None = None
     _retry: int = 0
 
     model_config = {"arbitrary_types_allowed": True}
 
-    @abstractmethod
-    async def transduce(
-        self, input: Union[str, Iterable[str]], *args, **kwargs
+    def __init__(self, **kwargs):
+        [setattr(self, name, value) for name, value in kwargs.items()]
+
+    async def execute(
+        self, *inputs: Union[BaseModel, str]
     ) -> Union[BaseModel, Iterable[BaseModel]]:
+        self._retry += 1
+        _inputs = []
+        if len(inputs) == 1:
+            # singular input awaits a single async call
+            try:
+                answers = await asyncio.wait_for(
+                    self._execute(inputs[0]), timeout=self.timeout
+                )
+            except Exception as e:
+                _indices = 0
+                _inputs = [inputs[0]] if isinstance(e, Exception) else []
+        else:
+            # A list of inputs gathers all async calls as tasks
+            tasks = [
+                asyncio.create_task(
+                    asyncio.wait_for(self._execute(i), timeout=self.timeout)
+                )
+                for i in inputs
+            ]
+            answers = await asyncio.gather(*tasks, return_exceptions=True)
+            _inputs = []
+            _indices = []
+            for i, task in enumerate(tasks):
+                if task.exception() and self._retry <= self.max_retries:
+                    _inputs.append(inputs[i])
+                    _indices.append(i)
+        if _inputs:
+            if self.verbose:
+                logger.debug(f"retrying {len(_inputs)} states")
+            await asyncio.sleep(self.wait)
+            _answers = await self.execute(*_inputs)
+            for i, answer in zip(_indices, _answers):
+                answers[i] = answer
+
+        self._retry = 0
+        return answers
+
+    @abstractmethod
+    async def _execute(self, input: Union[BaseModel, str], **kwargs) -> BaseModel:
         pass
 
 
-class TransducerVLLM(Transducer):
+class aMap(AsyncExecutor):
+    func: Callable
+
+    def __init__(self, func: Callable, **kwargs):
+        self.func = func
+        super().__init__(**kwargs)
+
+    async def _execute(self, state: BaseModel, **kwargs) -> BaseModel:
+        """Function Tranduction (amap) returns a pydantic model"""
+        output = await self.func(state, **kwargs)
+        return output
+
+
+class PydanticTransducer(AsyncExecutor):
+
+    async def execute(self, *inputs: str) -> List[BaseModel]:
+        """Pydantic transduction always returns a list of pydantic models"""
+        output = await super().execute(*inputs)
+        if len(inputs) == 1:
+            output = [output]
+        return output
+
+    @abstractmethod
+    async def _execute(self, input: str) -> BaseModel:
+        pass
+
+
+class PydanticTransducerVLLM(PydanticTransducer):
     llm: AsyncOpenAI
-    intensional_definiton: str
+    intentional_definiton: str
     verbose: bool = False
     MAX_CHAR_PROMPT: int = 15000
 
@@ -44,17 +113,18 @@ class TransducerVLLM(Transducer):
         verbose: bool = False,
         llm=None,
         tools=None,
-        intensional_definiton=None,
+        intentional_definiton=None,
+        timeout=10000,
         **kwargs,
     ):
         self.atype = atype
         self.verbose = verbose
         self.llm = llm
         self.tools = tools
-        self.intensional_definiton = (
-            intensional_definiton
-            if intensional_definiton
-            else """Generate an object of the specified Pydantic Type from the following input."""
+        self.timeout = timeout
+        self.intentional_definiton = (
+            intentional_definiton
+            or "Generate an object of the specified Pydantic Type from the following input."
         )
         self.llm_params = {
             "extra_body": {"guided_json": self.atype.model_json_schema()},
@@ -63,7 +133,7 @@ class TransducerVLLM(Transducer):
         }
         self.llm_params.update(kwargs)
 
-    async def transduce(
+    async def execute(
         self,
         input: Union[str, Iterable[str]],
         logprobs: bool = False,
@@ -73,7 +143,7 @@ class TransducerVLLM(Transducer):
 
         default_user_prompt = "\n".join(
             [
-                self.intensional_definiton,
+                self.intentional_definiton,
                 "Generate an object of the specified Pydantic Type from the following input.\n",
             ]
         )
@@ -99,7 +169,7 @@ class TransducerVLLM(Transducer):
                 )
                 processes.append(corutine)
             results = await asyncio.wait_for(
-                asyncio.gather(*processes, return_exceptions=True), timeout=10000
+                asyncio.gather(*processes, return_exceptions=True), timeout=self.timeout
             )
 
             decoded_results = []
@@ -115,10 +185,10 @@ class TransducerVLLM(Transducer):
             return NotImplemented
 
 
-class TransducerCrewAI(Transducer):
+class PydanticTransducerCrewAI(PydanticTransducer):
     crew: Crew
     llm: Any
-    intensional_definiton: str
+    intentional_definiton: str
     verbose: bool = False
     max_iter: int = 3
     MAX_CHAR_PROMPT: int = 15000
@@ -129,17 +199,17 @@ class TransducerCrewAI(Transducer):
         verbose: bool = False,
         llm=None,
         tools=None,
-        intensional_definiton=None,
+        intentional_definiton=None,
         max_iter=max_iter,
-        reasoning=False,
+        timeout: float | None = 200,
         **kwargs,
     ):
         self.atype = atype
-        self.llm = llm if llm else get_llm_provider()
-        self.intensional_definiton = (
-            intensional_definiton
-            if intensional_definiton
-            else """Generate an object of the specified Pydantic Type from the following input."""
+        self.llm = llm or watsonx_llm
+        self.timeout = timeout
+        self.intentional_definiton = (
+            intentional_definiton
+            or "Generate an object of the specified Pydantic Type from the following input."
         )
         self.prompt_params = {
             "role": "Task Executor",
@@ -155,12 +225,10 @@ class TransducerCrewAI(Transducer):
             verbose=verbose,
             max_iter=max_iter,
             llm=self.llm,
-            reasoning=reasoning,
-            max_reasoning_attempts=4,
             tools=tools if tools else [],
         )
         task = Task(
-            description=self.intensional_definiton + " {task_description}",
+            description=self.intentional_definiton + " {task_description}",
             expected_output=self.prompt_params["expected_output"],
             output_file="",
             agent=agent,
@@ -177,38 +245,8 @@ class TransducerCrewAI(Transducer):
             chat_llm=self.llm,
         )
 
-    async def _transduce_with_retry(self, input: str):
+    async def _execute(self, input: str) -> BaseModel:
         answer = await self.crew.kickoff_async(
             {"task_description": input[: self.MAX_CHAR_PROMPT]}
         )
         return answer.pydantic
-
-    async def transduce(self, *inputs: str) -> Union[BaseModel, Iterable[BaseModel]]:
-        self._retry += 1
-        _inputs = []
-        if len(inputs) == 1:
-            try:
-                answers = [await self._transduce_with_retry(inputs[0])]
-            except Exception as e:
-                _indices = 0
-                _inputs = [inputs[0]] if isinstance(e, Exception) else []
-        else:
-            tasks = [asyncio.create_task(self._transduce_with_retry(i)) for i in inputs]
-            answers = await asyncio.gather(*tasks, return_exceptions=True)
-            _inputs = []
-            _indices = []
-            for i, task in enumerate(tasks):
-                if task.exception() and self._retry <= self.max_retries:
-                    _inputs.append(inputs[i])
-                    _indices.append(i)
-        if _inputs:
-            logger.info(f"retrying {len(_inputs)} states")
-            if self.verbose:
-                logger.debug(f"retrying {len(_inputs)} states")
-            asyncio.sleep(self.wait)
-            _answers = await self.transduce(*_inputs)
-            for i, answer in zip(_indices, _answers):
-                answers[i] = answer
-
-        self._retry = 0
-        return answers

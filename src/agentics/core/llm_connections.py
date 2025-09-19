@@ -33,9 +33,7 @@ def get_llm_provider(provider_name: str = None) -> LLM:
             )
             return list(available_llms.values())[0]
         else:
-            logger.debug(
-                "No LLM is available. Please check your .env configuration."
-            )
+            logger.debug("No LLM is available. Please check your .env configuration.")
 
     else:
         if provider_name in available_llms:

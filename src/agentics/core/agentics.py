@@ -19,7 +19,6 @@ from typing import (
     Union,
 )
 
-import crewai
 import pandas as pd
 import yaml
 from crewai import LLM
@@ -28,15 +27,15 @@ from loguru import logger
 from pandas import DataFrame
 from pydantic import BaseModel, Field, create_model
 
-from agentics.abstractions.pydantic_transducer import (
-    TransducerCrewAI,
-    TransducerVLLM,
+from agentics.abstractions.async_executor import (
+    PydanticTransducerCrewAI,
+    PydanticTransducerVLLM,
+    aMap,
 )
-from agentics.abstractions.structured_output import generate_structured_output
+from agentics.core.errors import InvalidStateError
 from agentics.core.llm_connections import available_llms, get_llm_provider
 from agentics.core.mapping import AttributeMapping, ATypeMapping
 from agentics.core.utils import (
-    are_models_structurally_identical,
     clean_for_json,
     get_active_fields,
     make_all_fields_optional,
@@ -48,29 +47,17 @@ from agentics.core.utils import (
     sanitize_dict_keys,
 )
 
+# from agentics.core.globals import Memory
+
 # Type variables
 AG = TypeVar("AG", bound="AG")
 T = TypeVar("T", bound="BaseModel")
-StateReducer = Callable[[List[BaseModel]], Union[BaseModel, List[BaseModel]]]
+StateReducer = Callable[[List[BaseModel]], BaseModel | List[BaseModel]]
 StateOperator = Callable[[BaseModel], BaseModel]
 StateFlag = Callable[[BaseModel], bool]
 
 
-class AgenticsError(Exception):
-    """Base class for all custom exceptions in Agentics."""
-
-    pass
-
-
-class InvalidStateError(AgenticsError):
-    pass
-
-
-class TransductionError(AgenticsError):
-    pass
-
-
-class AG(BaseModel, Generic[TypeVar("AG")]):
+class AG(BaseModel, Generic[T]):
     """
     Agentics is a Python class that wraps a list of Pydantic objects and enables structured, type-driven logical transduction between them.
 
@@ -81,29 +68,9 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
 
     """
 
-    model_config = {"arbitrary_types_allowed": True}
     atype: Type[BaseModel] = Field(
         BaseModel,
         description="""this is the type in common among all element of the list""",
-    )
-    states: List[BaseModel] = []
-    transduce_fields: Optional[List[str]] = Field(
-        None,
-        description="""this is the list of field that will be used for the transduction, both incoming and outcoming""",
-    )
-    llm: Any = Field(default_factory=get_llm_provider, exclude=True)
-    tools: Optional[List[Any]] = Field(None, exclude=True)
-    max_iter: int = Field(
-        3,
-        description="Max number of iterations for the agent to provide a final transduction when using tools.",
-    )
-    instructions: Optional[str] = Field(
-        """Generate an object of the specified type from the following input.""",
-        description="Special instructions to be given to the agent for executing transduction",
-    )
-    prompt_template: Optional[str] = Field(
-        None,
-        description="Langchain style prompt pattern to be used when provided as an input for a transduction.  Refer to https://python.langchain.com/docs/concepts/prompt_templates/ ",
     )
     crew_prompt_params: Optional[Dict[str, str]] = Field(
         {
@@ -114,24 +81,44 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
         },
         description="prompt parameter for initializing Crew and Task",
     )
-    skip_intensional_definiton: bool = Field(
+    instructions: Optional[str] = Field(
+        """Generate an object of the specified type from the following input.""",
+        description="Special instructions to be given to the agent for executing transduction",
+    )
+    llm: Any = Field(default_factory=get_llm_provider, exclude=True)
+    max_iter: int = Field(
+        3,
+        description="Max number of iterations for the agent to provide a final transduction when using tools.",
+    )
+    memory_collection: Optional[str] = None
+    prompt_template: Optional[str] = Field(
+        None,
+        description="Langchain style prompt pattern to be used when provided as an input for a transduction.  Refer to https://python.langchain.com/docs/concepts/prompt_templates/ ",
+    )
+    reasoning: Optional[bool] = None
+    skip_intentional_definition: bool = Field(
         False,
         description="if True, don't compose intentional instruction for Crew Task",
     )
-    memory_collection: Optional[str] = None
+    states: List[BaseModel] = []
+    tools: Optional[List[Any]] = Field(None, exclude=True)
+    transduce_fields: Optional[List[str]] = Field(
+        None,
+        description="""this is the list of field that will be used for the transduction, both incoming and outcoming""",
+    )
     transduction_logs_path: Optional[str] = Field(
         None,
         description="""If not null, the specified file will be created and used to save the intermediate results of transduction from each batch. The file will be updated in real time and can be used for monitoring""",
     )
-    reasoning: Optional[bool] = False
-    batch_size: Optional[int] = 20
+    transduction_timeout: float | None = None
     verbose_transduction: bool = True
     verbose_agent: bool = False
 
+    class Config:
+        model_config = {"arbitrary_types_allowed": True}
+
     @staticmethod
     def create_crewai_llm(**kwargs):
-        from crewai import LLM
-
         return LLM(**kwargs)
 
     @classmethod
@@ -150,7 +137,6 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
             return available_llms[provider_name]
         raise ValueError(f"Unknown provider: {provider_name}")
 
-    ### Turn agentics into lists iterating on the states
     def __iter__(self):
         """Iterates over the list of states"""
         return iter(self.states)
@@ -159,10 +145,31 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
         """Returns the number of states"""
         return len(self.states)
 
-    def __call__(self, *fields) -> AG:
-        """Returns a new agentic with the subtype of fields"""
-        atype = self.subset_atype(fields)
-        new_ag = self.rebind_atype(atype, {i: i for i in fields})
+    def __call__(self, *fields, persist: Optional[Union[bool, List[str]]] = None) -> AG:
+        """
+        Returns a new agentic with the subtype of fields from self.
+
+        Args:
+            *fields (str): The fields used to create a new AG,
+                these fields are used for transductions.
+            persist (bool or list[str], optional): The created AG persists additional fields
+                from self, but those additional fields are not updated by the transduction.
+                - If persist is None, the AG atype only contains the fields
+                - If persist is True, the AG type remains the same and all the fields from
+                    self are persisted. Only the *fields are updated (similar to self-transduction)
+                - If persist is a list of strings, a new AG is created that includes the *fields as
+                    well as the persistent fields given. Only the *fields are updated
+        """
+        if persist and isinstance(persist, bool):
+            new_ag = self.clone()
+            new_ag.transduce_fields = list(fields)
+            return new_ag
+        elif isinstance(persist, Iterable) and all(isinstance(i, str) for i in persist):
+            all_fields = fields + tuple(persist)
+        else:
+            all_fields = fields
+        atype = self.subset_atype(all_fields)
+        new_ag = self.rebind_atype(atype, {f: f for f in all_fields})
         new_ag.transduce_fields = list(fields)
         return new_ag
 
@@ -170,23 +177,20 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
         """Returns the state for the provided index"""
         return self.states[index]
 
-    # Synchronous map
     def filter(self, func: StateFlag) -> AG:
         """func should be a function that takes as an input a state and return a boolean, false will be filtered out"""
         self.states = [state for state in self.states if func(state)]
         return self
 
-    async def amap(self, func: StateOperator) -> AG:
+    async def amap(self, func: StateOperator, timeout=None) -> AG:
         """Asynchronous map with exception-safe job gathering"""
         if self.verbose_transduction:
             logger.debug(f"Executing amap on function {func}")
 
+        mapper = aMap(func=func, timeout=timeout)
         begin_time = time.time()
         try:
-            tasks = []
-            for state in self.states:
-                corutine = asyncio.wait_for(func(state), timeout=300)
-                tasks.append(corutine)
+            tasks = [mapper.execute(state) for state in self.states]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             if self.transduction_logs_path:
                 with open(self.transduction_logs_path, "a") as f:
@@ -221,9 +225,9 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
         self.states = _states
         return self
 
-    async def areduce(self, func: StateReducer) -> T:
+    async def areduce(self, func: StateReducer) -> AG:
         output = await func(self.states)
-        self.states = output
+        self.states = [output] if isinstance(output, BaseModel) else output
         return self
 
     @classmethod
@@ -493,7 +497,11 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
                         )
                     )
 
-        elif isinstance(other, Iterable) and all(isinstance(i, str) for i in other):
+        elif isinstance(other, str) or (
+            isinstance(other, Iterable) and all(isinstance(i, str) for i in other)
+        ):
+            if isinstance(other, str):
+                other = [other]
             if self.verbose_transduction:
                 logger.debug(
                     f"Transduction from input texts {other} to {type(target_type)} in progress. This might take a while"
@@ -522,7 +530,7 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
         instructions = ""
 
         # Add instructions
-        if self.skip_intensional_definiton:
+        if self.skip_intentional_definition:
             instructions = f"{self.instructions}" if self.instructions else "\n"
         else:
             instructions += "\nYour task is to transduce a source Pydantic Object into the specified Output type. Generate only slots that are logically deduced from the input information, otherwise live then null.\n"
@@ -552,7 +560,9 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
 
         # Perform Transduction
         transducer_class = (
-            TransducerCrewAI if type(self.llm) == crewai.LLM else TransducerVLLM
+            PydanticTransducerCrewAI
+            if type(self.llm) == LLM
+            else PydanticTransducerVLLM
         )
         if self.verbose_transduction:
             logger.debug(f"transducer class: {transducer_class}")
@@ -567,14 +577,14 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
                 transduced_type,
                 tools=self.tools,
                 llm=self.llm,
-                intensional_definiton=instructions,
+                intentional_definiton=instructions,
                 verbose=self.verbose_agent,
                 max_iter=self.max_iter,
+                timeout=self.timeout,
+                reasoning=self.reasoning,
                 **self.crew_prompt_params,
             )
-            transduced_results = await asyncio.wait_for(
-                pt.transduce(*input_prompts), timeout=200
-            )
+            transduced_results = await pt.execute(*input_prompts)
             end_time = time.time()
             if self.verbose_transduction:
                 logger.debug(
@@ -614,13 +624,11 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
                 output_state = output_states[i]
                 if isinstance(output_state, tuple):
                     output_state_dict = dict([output_state])
-                elif are_models_structurally_identical(type(output_state), target_type):
-                    output_state_dict = output_state.model_dump()
                 else:
-                    output_state_dict = output_state[0].model_dump()
+                    output_state_dict = output_state.model_dump()
 
                 merged = self.atype(
-                    **(other.states[i].model_dump() | output_state_dict)
+                    **(self[i].model_dump() | other[i].model_dump() | output_state_dict)
                 )
                 output.states.append(merged)
         elif isinstance(other, Iterable) and all(isinstance(i, str) for i in other):
@@ -706,9 +714,8 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
         Usage: After evaluating the prompts we want separate the evaluated sets and reduce score from each
         """
         quotient_list = []
-        quotient_size, quotient_counts = (
-            len(self.states),
-            len(other.states) // len(self.states),
+        quotient_size, quotient_counts = len(self.states), len(other.states) // len(
+            self.states
         )
         for ind in range(quotient_counts):
             quotient_ag = self.clone()
@@ -780,8 +787,7 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
     ):
         target = self.clone()
         self.transduce_fields = source_fields
-        if instructions:
-            target.instructions = instructions
+        target.instructions = instructions or target.instructions
         target.transduce_fields = target_fields
 
         output_process = target << self
@@ -828,8 +834,17 @@ class AG(BaseModel, Generic[TypeVar("AG")]):
         data = [state.model_dump() for state in self.states]
         return pd.DataFrame(data)
 
+    @property
+    def fields(self) -> List[str]:
+        """Returns the list of atype model fields"""
+        return list(self.atype.model_fields)
+
     def pretty_print(self):
         output = f"Atype : {self.atype}\n"
         for state in self.states:
             output += yaml.dump(state.model_dump(), sort_keys=False) + "\n"
         return output
+
+    def append(self, state: BaseModel):
+        """Append the state into the list of states"""
+        self.states.append(state)
