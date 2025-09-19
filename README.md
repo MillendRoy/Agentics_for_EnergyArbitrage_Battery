@@ -72,7 +72,7 @@ We welcome new AG entusiasts to extend this framework with new applications and 
 
 ## 📘 Example Usage
 ```python
-from agentics import Agentics as AG
+from agentics import AG
 from pydantic import BaseModel
 
 class Answer(BaseModel):
