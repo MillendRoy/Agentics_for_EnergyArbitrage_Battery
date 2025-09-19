@@ -49,3 +49,13 @@ def wheel(
         ctx.run(f"uv build -o {output}", in_stream=False)
     wheel_file, *_ = output.glob("*.whl")
     return wheel_file
+
+
+@pytest.fixture()
+def llm_provider():
+    try:
+        from agentics.core.llm_connections import get_llm_provider
+
+        return get_llm_provider()
+    except ValueError:
+        raise pytest.skip(reason="No available LLM")

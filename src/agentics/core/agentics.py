@@ -6,20 +6,12 @@ import time
 from collections.abc import Iterable
 from copy import copy, deepcopy
 from functools import partial, reduce
-from typing import (
-    Any,
-    Awaitable,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Type,
-    TypeVar,
-    Union
-)
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Type, TypeVar, Union
+
 import crewai
 import pandas as pd
 import yaml
+from crewai import LLM
 from langchain_core.prompts import PromptTemplate
 from loguru import logger
 from pandas import DataFrame
@@ -29,8 +21,9 @@ from agentics.abstractions.pydantic_transducer import (
     PydanticTransducerCrewAI,
     PydanticTransducerVLLM,
 )
-from agentics.core.llm_connections import get_llm_provider, available_llms
 from agentics.abstractions.structured_output import generate_structured_output
+from agentics.core.llm_connections import available_llms, get_llm_provider
+from agentics.core.mapping import AttributeMapping, ATypeMapping
 from agentics.core.utils import (
     are_models_structurally_identical,
     chunk_list,
@@ -42,10 +35,8 @@ from agentics.core.utils import (
     pydantic_model_from_dict,
     pydantic_model_from_jsonl,
     remap_dict_keys,
-    sanitize_dict_keys
+    sanitize_dict_keys,
 )
-from agentics.core.mapping import AttributeMapping, ATypeMapping
-from crewai import LLM
 
 T = TypeVar("T", bound=BaseModel)
 ReduceStatesType = Callable[[List[T]], T]
@@ -67,7 +58,7 @@ class TransductionError(AgenticsError):
 
 from enum import Enum
 
-AG = TypeVar("A", bound="AG")
+AG = TypeVar("AG", bound="AG")
 
 
 class AG(BaseModel):
@@ -93,7 +84,11 @@ class AG(BaseModel):
     )
     llm: Any = Field(get_llm_provider(), exclude=True)
     tools: Optional[List[Any]] = Field(None, exclude=True)
-    max_iter:int = Field(3, exclude=False,description="Max number of iterations for the agent to provide a final transduction when using tools.")
+    max_iter: int = Field(
+        3,
+        exclude=False,
+        description="Max number of iterations for the agent to provide a final transduction when using tools.",
+    )
     instructions: Optional[str] = Field(
         """Generate an object of the specified type from the following input.""",
         description="Special instructions to be given to the agent for executing transduction",
@@ -120,7 +115,7 @@ class AG(BaseModel):
         None,
         description="""If not null, the specified file will be created and used to save the intermediate results of transduction from each batch. The file will be updated in real time and can be used for monitoring""",
     )
-    reasoning:Optional[bool] = False
+    reasoning: Optional[bool] = False
     batch_size: Optional[int] = 20
     verbose_transduction: bool = True
     verbose_agent: bool = False
@@ -130,17 +125,22 @@ class AG(BaseModel):
         from crewai import LLM
 
         return LLM(**kwargs)
-    
+
     @classmethod
-    def get_llm_provider(cls, provider_name: str = "first") -> Union[LLM, dict[str, LLM]]:
+    def get_llm_provider(
+        cls, provider_name: str = "first"
+    ) -> Union[LLM, dict[str, LLM]]:
         if provider_name == "first":
-            return  next(iter(available_llms.values()), None) if len(available_llms)>0 else None
+            return (
+                next(iter(available_llms.values()), None)
+                if len(available_llms) > 0
+                else None
+            )
         if provider_name == "list":
             return available_llms
         if provider_name in available_llms:
             return available_llms[provider_name]
         raise ValueError(f"Unknown provider: {provider_name}")
-
 
     ### Turn agentics into lists iterating on the states
     def __iter__(self):
@@ -196,11 +196,7 @@ class AG(BaseModel):
                     )
                 i += 1
             except asyncio.TimeoutError and Exception as e:
-                size = (
-                    self.batch_size
-                    if len(chunk) == self.batch_size
-                    else len(chunk)
-                )
+                size = self.batch_size if len(chunk) == self.batch_size else len(chunk)
                 if self.verbose_transduction:
                     logger.debug(
                         f"ERROR, states {(i - 1) * self.batch_size + 1} to {((i - 1) * self.batch_size) + size} have not been transduced"
@@ -257,7 +253,7 @@ class AG(BaseModel):
         csv_file,
         atype: Type[BaseModel] = None,
         max_rows: int = None,
-        task_description: str = None
+        task_description: str = None,
     ) -> AG:
         """
         Import an object of type Agentics from a CSV file.
@@ -598,11 +594,7 @@ class AG(BaseModel):
                     for i, output_state in enumerate(output_states_tmp)
                 ]
                 end_time = time.time()
-                size = (
-                    self.batch_size
-                    if len(chunk) == self.batch_size
-                    else len(chunk)
-                )
+                size = self.batch_size if len(chunk) == self.batch_size else len(chunk)
                 if self.verbose_transduction:
                     logger.debug(
                         f"Processed {size} states in {end_time - begin_time} seconds"
@@ -612,11 +604,7 @@ class AG(BaseModel):
                     logger.debug(
                         "Warning: Failed to transduce batch. Executing individual steps"
                     )
-                size = (
-                    self.batch_size
-                    if len(chunk) == self.batch_size
-                    else len(chunk)
-                )
+                size = self.batch_size if len(chunk) == self.batch_size else len(chunk)
 
                 begin_time = time.time()
                 pt = transducer_class(
@@ -652,9 +640,10 @@ class AG(BaseModel):
             if self.transduction_logs_path:
                 with open(self.transduction_logs_path, "a") as f:
                     for state in output_states:
-                        if state :
+                        if state:
                             f.write(state.model_dump_json() + "\n")
-                        else: f.write(self.atype().model_dump_json() + "\n")
+                        else:
+                            f.write(self.atype().model_dump_json() + "\n")
             if self.verbose_transduction:
                 logger.debug(
                     f"{i * self.batch_size if i > 1 else len(chunk)} states processed in {(end_time - begin_time) / self.batch_size} seconds average per state ..."
@@ -677,11 +666,12 @@ class AG(BaseModel):
                 output.states.append(merged)
         elif isinstance(other, Iterable) and all(isinstance(i, str) for i in other):
             for i in range(len(other)):
-                if isinstance(output_states[i] , self.atype):
+                if isinstance(output_states[i], self.atype):
                     output.states.append(self.atype(**output_states[i].model_dump()))
                 elif output_states[i]:
                     output.states.append(self.atype(**output_states[i][0].model_dump()))
-                else: output.states.append(self.atype())
+                else:
+                    output.states.append(self.atype())
         return output
 
     async def apply_to_states(
@@ -757,8 +747,9 @@ class AG(BaseModel):
         Usage: After evaluating the prompts we want separate the evaluated sets and reduce score from each
         """
         quotient_list = []
-        quotient_size, quotient_counts = len(self.states), len(other.states) // len(
-            self.states
+        quotient_size, quotient_counts = (
+            len(self.states),
+            len(other.states) // len(self.states),
         )
         for ind in range(quotient_counts):
             quotient_ag = self.clone()
@@ -787,11 +778,8 @@ class AG(BaseModel):
             return AG(
                 atype=self.atype, tools=self.tools, states=self.states + other.states
             )
-        
 
         return NotImplemented
-
-
 
     async def map_atypes(self, other: AG) -> ATypeMapping:
         if self.verbose_agent:

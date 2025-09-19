@@ -1,11 +1,19 @@
+import asyncio
+import json
+import os
 import re
+import sqlite3
+from typing import Literal, Set
+
+import aiosqlite
 import pandas as pd
-from loguru import logger 
-import aiosqlite, asyncio, sqlite3
-from httpx import AsyncClient
-from typing import Set, List, Any, Dict, Literal, Union
 from dotenv import load_dotenv
+from httpx import AsyncClient
+from loguru import logger
+
 load_dotenv()
+
+
 async def _endpoint_call(call: Literal["GET", "POST"], endpoint: str, **kwargs):
     api_key = os.getenv("ENDPOINT_API_KEY")
     url = f"{os.getenv('ENDPOINT_URL')}{endpoint}"
@@ -22,7 +30,8 @@ async def _endpoint_call(call: Literal["GET", "POST"], endpoint: str, **kwargs):
                     url, headers=headers, timeout=None, **kwargs
                 )
         return response.json()
- 
+
+
 async def execute_sql_on_endpoint(sql: str, db_id: str) -> str:
     payload = {
         "sql": sql,
@@ -44,7 +53,6 @@ async def execute_sql_on_endpoint(sql: str, db_id: str) -> str:
         return None
 
 
-
 def fix_double_quoted_literals(sql: str) -> str:
     """
     Convert double-quoted *literals* to single-quoted strings.
@@ -53,7 +61,7 @@ def fix_double_quoted_literals(sql: str) -> str:
     Heuristic: if the content is a simple identifier ([A-Za-z_][A-Za-z0-9_]*),
     we keep the double quotes; otherwise we treat it as a literal and convert.
     """
-    ident_re = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+    ident_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
     def repl(m):
         body = m.group(1).replace('""', '"')  # unescape doubled quotes inside ""
@@ -65,36 +73,43 @@ def fix_double_quoted_literals(sql: str) -> str:
 
     # Match " ... " allowing doubled "" inside
     return re.sub(r'"((?:[^"]|"")*)"', repl, sql)
-import os, json
 
-def get_schema_from_file(benchmark_id, db_id : str = None):
-    with open(os.path.join(os.getenv("SQL_BENCHMARKS_FOLDER"), 
-                    benchmark_id + "-schema.json")) as f:
-        all_dbs=json.load(f)
-    
+
+def get_schema_from_file(benchmark_id, db_id: str = None):
+    with open(
+        os.path.join(os.getenv("SQL_BENCHMARKS_FOLDER"), benchmark_id + "-schema.json")
+    ) as f:
+        all_dbs = json.load(f)
+
     return all_dbs.get(db_id) if db_id else all_dbs
-     
 
 
-def get_schema_from_sqllite(db_path, add_sample_values:int =5):
+def get_schema_from_sqllite(db_path, add_sample_values: int = 5):
 
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = cursor.fetchall()
-    schema_json={}
+    schema_json = {}
     for table in tables:
-         
+
         table_name = table[0]
 
         # --- get schema info ---
         cursor.execute(f"PRAGMA table_info({table_name});")
         schema = cursor.fetchall()
-        schema_json[table[0]] = { col[1] : {"type" : col[2], "notnull" : col[3], "dflt_value": col[4], } for col in schema} 
+        schema_json[table[0]] = {
+            col[1]: {
+                "type": col[2],
+                "notnull": col[3],
+                "dflt_value": col[4],
+            }
+            for col in schema
+        }
 
         columns = [col[1] for col in schema]  # column names
         if add_sample_values:
-        # --- get sample data ---
+            # --- get sample data ---
             cursor.execute(f"SELECT * FROM {table_name} LIMIT {add_sample_values};")
             sample_data = cursor.fetchall()
 
@@ -107,30 +122,25 @@ def get_schema_from_sqllite(db_path, add_sample_values:int =5):
 
     return schema_json
 
+    # # build column descriptions
+    # schema_json[table_name] = {
+    #     col[1]: {
+    #         "type": col[2],
+    #         "notnull": col[3],
+    #         "dflt_value": col[4],
+    #         "samples": []   # will fill below
+    #     }
+    #     for col in schema
+    # }
 
-   
+    # # --- get sample data ---
+    # cursor.execute(f"SELECT * FROM {table_name} LIMIT 3;")
+    # sample_data = cursor.fetchall()
 
-
-        # # build column descriptions
-        # schema_json[table_name] = {
-        #     col[1]: {
-        #         "type": col[2],
-        #         "notnull": col[3],
-        #         "dflt_value": col[4],
-        #         "samples": []   # will fill below
-        #     }
-        #     for col in schema
-        # }
-
-        # # --- get sample data ---
-        # cursor.execute(f"SELECT * FROM {table_name} LIMIT 3;")
-        # sample_data = cursor.fetchall()
-
-        # # attach samples per column
-        # for row in sample_data:
-        #     for col_name, value in zip(columns, row):
-        #         schema_json[table_name][col_name]["samples"].append(value)
-
+    # # attach samples per column
+    # for row in sample_data:
+    #     for col_name, value in zip(columns, row):
+    #         schema_json[table_name][col_name]["samples"].append(value)
 
 
 def remove_duplicate_col_df(df):
@@ -152,12 +162,12 @@ def convert_df_to_set(df, row_invariant=True) -> Set:
         return set([tuple(df[c].to_list()) for c in df.columns.values])
 
 
-
 def compare_df(gt, predicted, row_invariant=False) -> bool:
     # 1: gt_df is subset of predicted_df
     # 2: df1 == df2
     # 0: otherwise
-    if predicted.startswith("Error:") or gt.startswith("Error:"): return 0
+    if predicted.startswith("Error:") or gt.startswith("Error:"):
+        return 0
     gt_df = pd.read_json(gt)
     predicted_df = pd.read_json(predicted)
     gt_df = gt_df.map(lambda x: float(f"{x:.5f}") if isinstance(x, float) else x)
@@ -172,48 +182,47 @@ def compare_df(gt, predicted, row_invariant=False) -> bool:
     return (
         1
         if (intersec == gt_set)
-        else 1
-        if (predicted_set == gt_set)
-        else 1
-        if (intersec == predicted_set)
-        else 0
+        else 1 if (predicted_set == gt_set) else 1 if (intersec == predicted_set) else 0
     )
 
-async def async_execute_sql(sql_query: str, db_path:str = None, endpoint_id:str=None) -> str:
-    """ DB id could be a path or a Endpoint connection string"""
+
+async def async_execute_sql(
+    sql_query: str, db_path: str = None, endpoint_id: str = None
+) -> str:
+    """DB id could be a path or a Endpoint connection string"""
     if endpoint_id:
-       
-        return await execute_sql_on_endpoint(sql_query,endpoint_id)
+
+        return await execute_sql_on_endpoint(sql_query, endpoint_id)
 
     elif db_path:
         try:
             async with aiosqlite.connect(db_path) as db:
-                async with db.execute(sql_query.replace("\"","'")) as cursor:
+                async with db.execute(sql_query.replace('"', "'")) as cursor:
                     columns = [description[0] for description in cursor.description]
                     rows = await asyncio.wait_for(cursor.fetchall(), timeout=10)
                     df = pd.DataFrame(rows, columns=columns)
                     return df.to_json()
         except Exception as e:
             return f"Error: {str(e)}"
-    
+
 
 def evaluate_execution_accuracy(test):
-        total = 0
-        for question in test:
-            total+= compare_df(question.system_output_df, question.gt_output_df)
-        execution_accuracy = total/len(test.states)
-        print(f"Test size: {len(test.states)}\nExecution Accuracy: {execution_accuracy}")
-        return execution_accuracy
+    total = 0
+    for question in test:
+        total += compare_df(question.system_output_df, question.gt_output_df)
+    execution_accuracy = total / len(test.states)
+    print(f"Test size: {len(test.states)}\nExecution Accuracy: {execution_accuracy}")
+    return execution_accuracy
 
-def load_benchmark(benchmark_id: str = None,path = None):
-    with open(os.getenv("SQL_BENCHMARKS_FOLDER")+".json") as f:
+
+def load_benchmark(benchmark_id: str = None, path=None):
+    with open(os.getenv("SQL_BENCHMARKS_FOLDER") + ".json") as f:
         benchmarks = json.loads(f.read())
         print()
         for benchmark in benchmarks:
-            if os.getenv("ENDPOINT_METADATA") in  benchmarks[benchmark]:
-                print("WWWWW", os.getenv("ENDPOINT_METADATA"))
-                benchmarks[benchmark]["datasource_url"] = benchmarks[benchmark][os.getenv("ENDPOINT_METADATA")]
+            if os.getenv("ENDPOINT_METADATA") in benchmarks[benchmark]:
+                benchmarks[benchmark]["datasource_url"] = benchmarks[benchmark][
+                    os.getenv("ENDPOINT_METADATA")
+                ]
                 benchmarks[benchmark].pop(os.getenv("ENDPOINT_METADATA"))
         return benchmarks.get(benchmark_id) or benchmarks
-    
-
