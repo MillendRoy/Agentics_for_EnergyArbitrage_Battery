@@ -39,6 +39,7 @@ with MCPServerAdapter(server_params) as server_tools:
                             tools = server_tools, 
                             max_iter=10,
                             verbose_agent=True,
+                            reasoning=True,
                             #description="Extract stock market price for the input day ",
                             llm=AG.get_llm_provider("watsonx")) <<[input("USER> ")])
     print(results.pretty_print())

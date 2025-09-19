@@ -120,7 +120,7 @@ class AG(BaseModel):
         None,
         description="""If not null, the specified file will be created and used to save the intermediate results of transduction from each batch. The file will be updated in real time and can be used for monitoring""",
     )
-    reasoning:Optional[bool] = None
+    reasoning:Optional[bool] = False
     batch_size: Optional[int] = 20
     verbose_transduction: bool = True
     verbose_agent: bool = False

@@ -84,8 +84,8 @@ watsonx_llm = (
         base_url=os.getenv("WATSONX_URL"),
         project_id=os.getenv("WATSONX_PROJECTID"),
         api_key=os.getenv("WATSONX_APIKEY"),
-        max_tokens=8000,
-        temperature=0.9,
+        temperature=0.3,
+        max_input_tokens=100000,
     )
     if os.getenv("WATSONX_APIKEY")
     and os.getenv("WATSONX_URL")
@@ -111,7 +111,7 @@ vllm_crewai = (
         model=os.getenv("VLLM_MODEL_ID"),
         api_key="EMPTY",
         base_url=os.getenv("VLLM_URL"),
-        max_tokens=8000,
+        max_tokens=1000,
         temperature=0.0,
     )
     if os.getenv("VLLM_URL") and os.getenv("VLLM_MODEL_ID")
