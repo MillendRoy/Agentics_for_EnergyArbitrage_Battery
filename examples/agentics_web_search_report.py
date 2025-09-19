@@ -1,5 +1,3 @@
-"""required: export MCP_SERVER_PATH mcp/DDG_search_tool_mcp.py"""
-
 import asyncio
 import os
 from typing import Optional
@@ -9,8 +7,8 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 from agentics import Agentics as AG
-from agentics import get_llm_provider
-from mcp import StdioServerParameters
+from agentics.core.llm_connections import available_llms
+from mcp import StdioServerParameters  # For Stdio Server
 
 load_dotenv()
 
@@ -55,9 +53,10 @@ with MCPServerAdapter(server_params) as server_tools:
             tools=server_tools,
             max_iter=10,
             verbose_agent=True,
-            description="Extract stock market price for the input day ",
-            llm=get_llm_provider("watsonx"),
+            reasoning=True,
+            # description="Extract stock market price for the input day ",
+            llm=AG.get_llm_provider("watsonx"),
         )
-        << [input("AG>   Day\nUSER> ")]
+        << [input("USER> ")]
     )
     print(results.pretty_print())

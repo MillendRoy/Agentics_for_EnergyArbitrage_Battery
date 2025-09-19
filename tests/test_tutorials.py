@@ -4,6 +4,7 @@ import papermill as pm
 import pytest
 
 
+@pytest.mark.skip(reason="User input not mocked")
 @pytest.mark.parametrize(
     "notebook",
     (
@@ -15,7 +16,6 @@ import pytest
     ),
 )
 def test_tutorials(git_root, tmp_path: Path, notebook):
-
     input_notebook = Path(git_root) / notebook
 
     out_nb = tmp_path / "report_out.ipynb"
@@ -29,17 +29,13 @@ def test_tutorials(git_root, tmp_path: Path, notebook):
 
 
 @pytest.mark.asyncio
-async def test_hello_world():
-
-    import asyncio
-    import os
+async def test_hello_world(llm_provider):
     from typing import Optional
 
     from dotenv import load_dotenv
     from pydantic import BaseModel
 
     from agentics import Agentics as AG
-    from agentics.core.llm_connections import available_llms, get_llm_provider
 
     load_dotenv()
 
@@ -64,7 +60,7 @@ async def test_hello_world():
     answers = await (
         AG(
             atype=Answer,
-            llm=get_llm_provider(),  ##Select your LLM from list of available options
+            llm=llm_provider,  ##Select your LLM from list of available options
             # instructions="""Provide an Answer for the following input text
             # only if it contains an appropriate question that do not contain
             # violent or adult language """

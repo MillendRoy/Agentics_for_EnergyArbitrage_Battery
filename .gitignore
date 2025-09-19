@@ -33,3 +33,6 @@ report.html
 
 # IDE
 .vscode
+
+# local folders
+__*__/

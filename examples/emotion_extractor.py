@@ -5,8 +5,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from agentics.core.agentics import Agentics as AG
-from agentics.core.llm_connections import available_llms
+from agentics import AG
 
 
 class Emotion(BaseModel):
@@ -37,9 +36,7 @@ def split_into_chunks(text, chunk_size=200):
 async def main():
 
     emotion_detector = AG(
-        atype=EmotionDector,
-        llm=available_llms["watsonx"],
-        transduction_logs_path="/tmp/emotion_extractor.logs",
+        atype=EmotionDector, llm=AG.get_llm_provider(), batch_size_transduction=20
     )
 
     current_file = Path(__file__).resolve()
@@ -55,7 +52,6 @@ async def main():
     emotion_detector.verbose_transduction = True
     emotions = await (emotion_detector << split_into_chunks(text)[:100])
 
-    emotions.to_csv("/tmp/The_Brothers_Karamazov_emotions.json")
     emotions.pretty_print()
 
 

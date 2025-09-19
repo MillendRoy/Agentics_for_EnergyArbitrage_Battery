@@ -1,8 +1,8 @@
 <h1 align="center">Agentics</h1>
 <h2 align="center">Transduction is all you need</h1>
 <p align="center">
-    <img src="image.png" height="128">
-    <img src="image.png" height="128">
+    <img src="https://raw.githubusercontent.com/IBM/Agentics/refs/heads/main/image.png" height="128">
+    <img src="https://raw.githubusercontent.com/IBM/Agentics/refs/heads/main/image.png" height="128">
 </p>
 
 
