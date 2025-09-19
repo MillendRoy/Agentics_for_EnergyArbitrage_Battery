@@ -848,3 +848,11 @@ class AG(BaseModel, Generic[T]):
     def append(self, state: BaseModel):
         """Append the state into the list of states"""
         self.states.append(state)
+
+    @property
+    def timeout(self):
+        return self.transduction_timeout
+
+    @timeout.setter
+    def timeout(self, value: float):
+        self.transduction_timeout = value
