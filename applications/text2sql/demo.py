@@ -20,43 +20,13 @@ st.header("Agentics Text2SQL")
 
 with st.form("Benchmark Selection"):
     benchmark_id = st.selectbox("Choose your Benchmark", options=list(load_benchmark().keys()))
+    n_questions = st.number_input("Max Questions",value =0)
     select_benchmark = st.form_submit_button("Select Benchmark")
+
     evaluate_benchmark = st.form_submit_button("Evaluate Benchmark")
 
+st.session_state.use_answer_validation=st.toggle("Answer Validation")
 
-if select_benchmark:
-    st.session_state.benchmark_metadata = load_benchmark(benchmark_id)
-    if "datasource_url" in st.session_state.benchmark_metadata:
-        questions = json.load(open(os.path.join(os.getenv("SQL_BENCHMARKS_FOLDER"), 
-                                        benchmark_id + ".json")))
-        st.session_state.benchmark_questions=AG(atype=Text2sqlQuestion)
-        for question in questions:
-            st.session_state.benchmark_questions.states.append(Text2sqlQuestion(question=question["page_content"],
-                            sql=question["sql"],
-                            benchmark_id=benchmark_id,
-                            endpoint_id=str(st.session_state.benchmark_metadata["datasource_url"].split("/")[-1])
-                            ) )  
-
-    
-    else:
-
-        st.session_state.benchmark_questions= AG.from_jsonl(
-                os.path.join(os.getenv("SQL_BENCHMARKS_FOLDER"), 
-                                        benchmark_id + ".json"),     
-                jsonl=False,
-                atype=Text2sqlQuestion)  
-    final_questions=[]
-    for question in  st.session_state.benchmark_questions:
-        question.benchmark_id = benchmark_id
-        final_questions.append(question)
-    st.session_state.benchmark_questions.states = final_questions
-
-
-if evaluate_benchmark and st.session_state.benchmark_questions:
-    executed_questions = asyncio.run(execute_questions(st.session_state.benchmark_questions))
-    st.write(evaluate_execution_accuracy(executed_questions))
-
-     
 
 
 with st.form("Select Question"):
@@ -74,6 +44,46 @@ with st.form("Ask your own question"):
 
 
 
+if select_benchmark:
+    st.session_state.benchmark_metadata = load_benchmark(benchmark_id)
+    if "datasource_url" in st.session_state.benchmark_metadata:
+        questions = json.load(open(os.path.join(os.getenv("SQL_BENCHMARKS_FOLDER"), 
+                                        benchmark_id + ".json")))
+        st.session_state.benchmark_questions=AG(atype=Text2sqlQuestion)
+        for question in questions[:n_questions if n_questions>0 else None] :
+            st.session_state.benchmark_questions.states.append(Text2sqlQuestion(question=question["page_content"],
+                            sql=question["sql"],
+                            benchmark_id=benchmark_id,
+                            endpoint_id=str(st.session_state.benchmark_metadata["datasource_url"].split("/")[-1])
+                            ) )  
+
+    
+    else:
+
+        st.session_state.benchmark_questions= AG.from_jsonl(
+                os.path.join(os.getenv("SQL_BENCHMARKS_FOLDER"), 
+                                        benchmark_id + ".json"),     
+                jsonl=False,
+                atype=Text2sqlQuestion,
+                max_rows=n_questions if n_questions>0 else None)  
+    final_questions=[]
+    for question in  st.session_state.benchmark_questions:
+        question.benchmark_id = benchmark_id
+        final_questions.append(question)
+    st.session_state.benchmark_questions.states = final_questions
+    st.rerun()
+
+
+if evaluate_benchmark and st.session_state.benchmark_questions:
+    with st.spinner("Wait Benchmark Execution In Progress"):
+        st.session_state.benchmark_questions = asyncio.run(execute_questions(st.session_state.benchmark_questions, answer_validation=st.session_state.use_answer_validation))
+        ex = evaluate_execution_accuracy(st.session_state.benchmark_questions)
+        st.write(f"Execution Accuracy: {ex}\nEvaluated on {len(st.session_state.benchmark_questions.states)} questions")
+
+     
+
+
+
 if execute_selected:
     test=AG(atype=Text2sqlQuestion, states=[select_question])
     
@@ -86,12 +96,15 @@ if execute_user_question:
 if execute_selected or execute_user_question:
     test = asyncio.run(execute_questions(test))
     col1, col2 = st.columns(2)
-    col1.markdown("### System")
+    col1.markdown(f"### System\n\n{test[0].generated_query}")
+    
     try:
         col1.dataframe(json.loads(test[0].system_output_df))
     except:
         col1.write(test[0].system_output_df)
-    col2.markdown("### GT")
+
+    col2.markdown(f"### GT\n\n{test[0].sql or test[0].query}")
+
     try:
         col2.dataframe(json.loads(test[0].gt_output_df))
     except:
