@@ -47,6 +47,9 @@ source = "uv-dynamic-versioning"
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentics"]
 
+[tool.hatch.build.targets.sdist]
+packages = ["src/agentics"]
+
 
 [dependency-groups]
 dev = [
@@ -59,6 +62,7 @@ dev = [
   "pytest-html >=4.1.1,<5",
   "invoke>=2.2.0",
   "papermill>=2.6.0",
+  "pytest-xdist>=3.8.0",
 ]
 docling = [
   "langchain-docling >=0.2.0,<0.3.0"

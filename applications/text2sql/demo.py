@@ -1,10 +1,12 @@
-import streamlit as st
-import os
 import asyncio
-from agentics import AG
-from text2sql import execute_questions, Text2sqlQuestion
-from utils import load_benchmark, get_schema_from_file, evaluate_execution_accuracy
 import json
+import os
+
+import streamlit as st
+from text2sql import Text2sqlQuestion, execute_questions
+from utils import evaluate_execution_accuracy, get_schema_from_file, load_benchmark
+
+from agentics import AG
 
 if "benchmark_questions" not in st.session_state:
     st.session_state.benchmark_questions = AG(atype=Text2sqlQuestion)
@@ -13,19 +15,18 @@ if "benchmark_metadata" not in st.session_state:
     st.session_state.benchmark_metadata = {}
 
 
-
 st.header("Agentics Text2SQL")
-
 
 
 with st.form("Benchmark Selection"):
     benchmark_id = st.selectbox("Choose your Benchmark", options=list(load_benchmark().keys()))
     n_questions = st.number_input("Max Questions",value =0)
     select_benchmark = st.form_submit_button("Select Benchmark")
+    use_answer_validation=st.toggle("Answer Validation",value=False)
+    experiment_path=st.text_input("Experiments output path", value=None)
 
     evaluate_benchmark = st.form_submit_button("Evaluate Benchmark")
 
-st.session_state.use_answer_validation=st.toggle("Answer Validation")
 
 
 
@@ -76,34 +77,41 @@ if select_benchmark:
 
 if evaluate_benchmark and st.session_state.benchmark_questions:
     with st.spinner("Wait Benchmark Execution In Progress"):
-        st.session_state.benchmark_questions = asyncio.run(execute_questions(st.session_state.benchmark_questions, answer_validation=st.session_state.use_answer_validation))
+        st.session_state.benchmark_questions = asyncio.run(execute_questions(st.session_state.benchmark_questions, answer_validation=use_answer_validation))
         ex = evaluate_execution_accuracy(st.session_state.benchmark_questions)
         st.write(f"Execution Accuracy: {ex}\nEvaluated on {len(st.session_state.benchmark_questions.states)} questions")
-
+        if experiment_path: st.session_state.benchmark_questions.to_jsonl(experiment_path)
      
 
 
 
 if execute_selected:
-    test=AG(atype=Text2sqlQuestion, states=[select_question])
-    
+    test = AG(atype=Text2sqlQuestion, states=[select_question])
+
 
 if execute_user_question:
-    question=Text2sqlQuestion(question=user_question, db_id=db,benchmark_id=benchmark_id, endpoint_id=str(st.session_state.benchmark_metadata["datasource_url"].split("/")[-1]))
-    test=AG(atype=Text2sqlQuestion, states=[question])
+    question = Text2sqlQuestion(
+        question=user_question,
+        db_id=db,
+        benchmark_id=benchmark_id,
+        endpoint_id=str(
+            st.session_state.benchmark_metadata["datasource_url"].split("/")[-1]
+        ),
+    )
+    test = AG(atype=Text2sqlQuestion, states=[question])
 
 
 if execute_selected or execute_user_question:
     test = asyncio.run(execute_questions(test))
     col1, col2 = st.columns(2)
-    col1.markdown(f"### System\n\n{test[0].generated_query}")
+    col1.markdown(f"### System\n\n```sql\n{test[0].generated_query}")
     
     try:
         col1.dataframe(json.loads(test[0].system_output_df))
     except:
         col1.write(test[0].system_output_df)
 
-    col2.markdown(f"### GT\n\n{test[0].sql or test[0].query}")
+    col2.markdown(f"### GT\n\n```sql\n{test[0].sql or test[0].query}")
 
     try:
         col2.dataframe(json.loads(test[0].gt_output_df))
@@ -119,8 +127,8 @@ if execute_selected or execute_user_question:
     #     st.dataframe(json.loads(test.system_output_df))
     # st.write(load_benchmark(benchmark_id))
     # test = AG.from_jsonl(
-    #     os.path.join(os.getenv("SQL_BENCHMARKS_FOLDER"), 
-    #                             benchmark_id + ".json"),     
+    #     os.path.join(os.getenv("SQL_BENCHMARKS_FOLDER"),
+    #                             benchmark_id + ".json"),
     #     jsonl=False,
     #     atype=Text2sqlQuestion,
     #     max_rows=10)
@@ -129,10 +137,3 @@ if execute_selected or execute_user_question:
 #     question_state= AG(atype=Text2sqlQuestion, states=(Text2sqlQuestion(db_id=target_db, question=question)))
 #     answer = asyncio.run(execute_questions(question_state))
 #     st.write(answer)
-
-
-
-
-
-
-

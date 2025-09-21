@@ -17,7 +17,7 @@ from crewai_tools import MCPServerAdapter
 from agentics import AG
 
 load_dotenv(find_dotenv())
-begin_time=time.time()
+
 
 
 class AnswerAssessment(BaseModel):
@@ -49,6 +49,7 @@ class Text2sqlQuestion(BaseModel):
     answer_assessment: Optional[AnswerAssessment] = Field(None, description="An assessment on the quality of the generated answer")
     system_output_df: Optional[str] = None
     gt_output_df: Optional[str] = None
+
 
 async def get_schema_map(state:Text2sqlQuestion)-> Text2sqlQuestion:
     # schema_path = os.path.join(os.getenv("SQL_DB_PATH"), 
@@ -98,7 +99,7 @@ async def execute_alternative_sql(state:Text2sqlQuestion)-> Text2sqlQuestion:
         answer_assessments.states.append(AnswerAssessment(sql=alternative_sql,
                                 output_dataframe =query_execution,
                                 question=state.question))
-    alternative_answer_assessments = await answer_assessments.self_transduction(["question","sql","output_dataframe"],["answer_quality_score" , "answer_quality_assessment"])
+    alternative_answer_assessments = await answer_assessments.self_transduction(["question","generated_question","output_dataframe"],["answer_quality_score" , "answer_quality_assessment"])
     state.alternative_answer_assessments = alternative_answer_assessments.states
     return state
 
@@ -119,7 +120,7 @@ async def select_best_answer(state:Text2sqlQuestion)-> Text2sqlQuestion:
 async def execute_questions(test:AG, 
                             few_shots_path:str = None,
                             answer_validation: bool = True):
-
+    begin_time=time.time()
     training = AG(atype=Text2sqlQuestion)
     if few_shots_path:
         training = get_training_data(few_shots_path)
@@ -134,7 +135,7 @@ async def execute_questions(test:AG,
     test.verbose_agent=False
 
     test = await test.self_transduction(
-        ["question","db_id", "schema","evidence"], 
+        ["question","db_id", "schema","evidence","commonsense_knowledge"], 
         ["generated_query"], 
         instructions=
             "Your task is to convert a natural language question into an accurate SQL query using the given the database schema.\n\n"
@@ -155,7 +156,7 @@ async def execute_questions(test:AG,
         test = await test.self_transduction(["question","db_id", "schema","evidence", "system_output_df"], ["answer_assessment"])
         
         test = await test.self_transduction(
-                ["question","db_id", "schema","evidence","answer_assessment"],
+                ["question","db_id", "schema","evidence", "commonsense_knowledge","answer_assessment"],
                 ["alternative_sql_queries"], 
                 instructions="""You previously generated , run , executed and assessed a SQL query needed to get 
                 information to answer a given utterance. Your task is to formulate 5 alternative SQL queries that 
@@ -198,4 +199,5 @@ async def run_evaluation_benchmark(benchmark_id = "archer_en_dev",
         return test
         
 
-
+test = AG.from_jsonl("/Users/gliozzo/Data/Text2SQL/Experiments/bird_mini_dev_sqlite_baseline.jsonl", atype=Text2sqlQuestion)
+evaluate_execution_accuracy(test)
