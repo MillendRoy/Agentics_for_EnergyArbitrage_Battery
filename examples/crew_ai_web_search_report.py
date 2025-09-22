@@ -7,7 +7,6 @@ from crewai_tools import MCPServerAdapter
 from pydantic import BaseModel, Field
 
 from agentics import AG
-from agentics.core.llm_connections import get_llm_provider
 from mcp import StdioServerParameters  # For Stdio Server
 
 

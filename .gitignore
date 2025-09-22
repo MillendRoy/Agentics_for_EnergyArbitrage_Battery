@@ -6,7 +6,6 @@ dist/
 *.pyc
 *.py[cod]
 .DS_Store
-.vscode
 
 # pyenv
 .python-version
@@ -32,4 +31,8 @@ agentics.code-workspace
 # Test reports
 report.html
 
+# IDE
+.vscode
+
+# local folders
 __*__/

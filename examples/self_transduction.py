@@ -25,7 +25,7 @@ async def main():
         "tweet", slot_type="str", description="Tweet used to advertise the movie"
     )
 
-    ## Step 3. Transduce input data into the new tweet field
+    # Step 3. Transduce input data into the new tweet field
     categorized_movies = await extended_movies.self_transduction(
         source_fields=["description", "movie_name", "genre"],
         target_fields=["tweet"],

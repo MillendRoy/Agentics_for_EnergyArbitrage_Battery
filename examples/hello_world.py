@@ -12,7 +12,7 @@ from agentics import AG
 
 load_dotenv()
 
-## Define output type
+# Define output type
 
 
 class Answer(BaseModel):
@@ -22,15 +22,16 @@ class Answer(BaseModel):
 
 async def main():
 
-    ## Collect input text
-
+    # Collect input text
     input_questions = [
         "What is the capital of Italy?",
         "When is the end of the world expected",
     ]
 
-    ## Transduce input strings into objects of type Answer.
-    ## You can customize this providing different llms and instructions.
+    """
+    Transduce input strings into objects of type Answer.
+    You can customize this providing different llms and instructions.
+    """
 
     answers = await (AG(atype=Answer) << input_questions)
 
