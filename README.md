@@ -8,6 +8,10 @@
 
 Agentics is a Python framework that provides structured, scalable, and semantically grounded agentic computation. It enables developers to build AI-powered pipelines where all operations are based on typed data transformations, combining the power of Pydantic models and LLMs with the flexibility of asynchronous execution.
 
+## Getting started
+
+Learn how to install Agentic, set up your environment, and run your first logical transduction. [Getting Started](docs/getting_started.md)
+
 
 ## Authors
 
