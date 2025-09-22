@@ -815,7 +815,7 @@ class AG(BaseModel, Generic[T]):
 
     def to_jsonl(self, jsonl_file: str) -> Any:
         if self.verbose_transduction:
-            logger.debug(f"Exporting {len(self.states)} Agentics to CSV {jsonl_file}")
+            logger.debug(f"Exporting {len(self.states)} states or atype {self.atype} to {jsonl_file}")
         with open(jsonl_file, mode="w", newline="", encoding="utf-8") as f:
             for state in self.states:
                 try:

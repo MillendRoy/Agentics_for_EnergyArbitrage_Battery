@@ -161,28 +161,36 @@ def convert_df_to_set(df, row_invariant=True) -> Set:
     else:
         return set([tuple(df[c].to_list()) for c in df.columns.values])
 
-
-def compare_df(gt, predicted, row_invariant=False) -> bool:
+from io import StringIO
+def compare_df(gt:str, predicted:str, row_invariant=False) -> int:
     # 1: gt_df is subset of predicted_df
     # 2: df1 == df2
     # 0: otherwise
-    if predicted.startswith("Error:") or gt.startswith("Error:"):
-        return 0
-    gt_df = pd.read_json(gt)
-    predicted_df = pd.read_json(predicted)
-    gt_df = gt_df.map(lambda x: float(f"{x:.5f}") if isinstance(x, float) else x)
-    predicted_df = predicted_df.map(
-        lambda x: float(f"{x:.5f}") if isinstance(x, float) else x
-    )
+    try:
+        gt_df = pd.read_json(StringIO(gt))
+    except:
+        gt_df=pd.DataFrame()
+    try:
+        predicted_df = pd.read_json(StringIO(predicted))
+    except:
+        predicted_df=pd.DataFrame()
+    # gt_df = gt_df.map(lambda x: float(f"{x:.5f}") if isinstance(x, float) else x)
+    # predicted_df = predicted_df.map(
+    #     lambda x: float(f"{x:.5f}") if isinstance(x, float) else x
+    # )
 
     gt_set = convert_df_to_set(gt_df, row_invariant=row_invariant)
     predicted_set = convert_df_to_set(predicted_df, row_invariant=row_invariant)
 
     intersec = gt_set & predicted_set
+    if gt_set in [{()}] : 
+        return -1
+
     return (
         1
         if (intersec == gt_set)
-        else 1 if (predicted_set == gt_set) else 1 if (intersec == predicted_set) else 0
+        #else 1 if (predicted_set == gt_set) else 1 if (intersec == predicted_set) else 0
+        else 0
     )
 
 
@@ -206,12 +214,54 @@ async def async_execute_sql(
             return f"Error: {str(e)}"
 
 
+def safe_read_df(raw):
+    raw = str(raw).strip()
+
+    # skip known garbage
+    if raw in ["{}", "{()}", "()", "[]", ""]:
+        return None
+
+    # try JSON decode first
+    try:
+        data = json.loads(raw)
+        # skip if it's clearly an error object
+        if isinstance(data, dict) and "error" in data:
+            return None
+        df = pd.DataFrame(data)
+    except Exception:
+        # fallback to pandas JSON reader
+        try:
+            df = pd.read_json(raw)
+        except Exception:
+            return None
+
+    # validate DataFrame content
+    if df.empty or df.isna().all().all():
+        return None
+    
+    # 3. dataframe only has "empty" placeholders like {} () [] ""
+    if all(df.map(lambda v: str(v).strip() in {"{}", "{()}", "()", "[]", ""}).all()):
+        return None
+    
+    return df
+
 def evaluate_execution_accuracy(test):
     total = 0
+    total_non_empty = 0
     for question in test:
-        total += compare_df(question.system_output_df, question.gt_output_df)
-    execution_accuracy = total / len(test.states)
-    print(f"Test size: {len(test.states)}\nExecution Accuracy: {execution_accuracy}")
+        
+        gt_df = safe_read_df(question.gt_output_df)
+        if gt_df is None: 
+            continue
+        res = compare_df(question.system_output_df, question.gt_output_df)
+        if "Error:" not in question.system_output_df and res >=0:
+            total += res
+            total_non_empty+=1
+            print(f"POSITIVE\ngt:{question.gt_output_df[:100]}\nsys:{question.system_output_df[:100]}")
+        else:
+            print(f"NEGATIVE\ngt:{question.gt_output_df[:100]}\nsys:{question.system_output_df[:100]}")
+    execution_accuracy = total / total_non_empty
+    print(f"Test size: {len(test.states)}\nTotal Valid (Non Empty GT): {total_non_empty}\nExecution Accuracy: {execution_accuracy}")
     return execution_accuracy
 
 
