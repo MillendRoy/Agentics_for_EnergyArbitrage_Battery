@@ -190,8 +190,7 @@ class AG(BaseModel, Generic[T]):
         mapper = aMap(func=func, timeout=timeout)
         begin_time = time.time()
         try:
-            tasks = [mapper.execute(state) for state in self.states]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            results = await mapper.execute(*self.states)
             if self.transduction_logs_path:
                 with open(self.transduction_logs_path, "a") as f:
                     for state in results:
