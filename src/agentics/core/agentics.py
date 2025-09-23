@@ -27,7 +27,7 @@ from loguru import logger
 from pandas import DataFrame
 from pydantic import BaseModel, Field, create_model
 
-from agentics.abstractions.async_executor import (
+from agentics.core.async_executor import (
     PydanticTransducerCrewAI,
     PydanticTransducerVLLM,
     aMap,
