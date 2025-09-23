@@ -1,10 +1,13 @@
+import asyncio
 import csv
 import inspect
 import json
 import os
 import re
+from collections.abc import Iterable
 from typing import (
     Any,
+    Awaitable,
     Dict,
     List,
     Optional,
@@ -25,6 +28,18 @@ from loguru import logger
 from openai import APIStatusError, AsyncOpenAI
 from pandas import DataFrame
 from pydantic import BaseModel, Field, create_model
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    ProgressColumn,
+    SpinnerColumn,
+    Task,
+    Text,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
 load_dotenv()
 
@@ -455,3 +470,48 @@ def pretty_print_atype(atype, indent: int = 2):
         for arg in args:
             pretty_print_atype(arg, indent + 2)
         print(f"{prefix}]")
+
+
+async def gather_with_progress(
+    coros: Iterable[Awaitable[Any]],
+    description: str = "Working",
+    return_exceptions: bool = False,
+) -> list[Any]:
+    """Show a Rich progress bar while awaiting async execution."""
+    columns = (
+        SpinnerColumn(),
+        TimeElapsedColumn(),
+        TextColumn(f"[bold]{description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TransductionSpeed(),
+        TimeRemainingColumn(),
+    )
+
+    with Progress(*columns, transient=False) as progress:
+        task_id = progress.add_task(description, total=len(coros))
+
+        async def track(coro: Awaitable[Any]) -> Any:
+            try:
+                return await coro
+            except Exception as e:
+                if return_exceptions:
+                    return e
+                raise
+            finally:
+                progress.advance(task_id)
+
+        return await asyncio.gather(
+            *(track(c) for c in coros), return_exceptions=return_exceptions
+        )
+
+
+class TransductionSpeed(ProgressColumn):
+    """Renders human readable transfer speed."""
+
+    def render(self, task: "Task") -> Text:
+        """Show data transfer speed."""
+        speed = task.finished_speed or task.speed
+        if speed is None:
+            return Text("? states/s", style="progress.data.speed")
+        return Text(f"{speed:.3f} states/s", style="progress.data.speed")
