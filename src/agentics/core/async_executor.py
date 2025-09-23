@@ -20,7 +20,7 @@ load_dotenv()
 class AsyncExecutor(ABC):
 
     wait: int = 0.01
-    max_retries: int = 5
+    max_retries: int = 2
     timeout: int | None = None
     _retry: int = 0
 
@@ -32,8 +32,8 @@ class AsyncExecutor(ABC):
     async def execute(
         self, *inputs: Union[BaseModel, str], description: str = "Executing"
     ) -> Union[BaseModel, Iterable[BaseModel]]:
-        self._retry += 1
         _inputs = []
+        _indices = []
         if len(inputs) == 1:
             # singular input awaits a single async call
             try:
@@ -41,8 +41,10 @@ class AsyncExecutor(ABC):
                     self._execute(inputs[0]), timeout=self.timeout
                 )
             except Exception as e:
-                _indices = 0
-                _inputs = [inputs[0]] if isinstance(e, Exception) else []
+                if isinstance(e, Exception) and self._retry < self.max_retries:
+                    _indices = [0]
+                    _inputs = [inputs[0]]
+                answers = e
         else:
             # A list of inputs gathers all async calls as tasks
             tasks = [
@@ -54,16 +56,13 @@ class AsyncExecutor(ABC):
             answers = await gather_with_progress(
                 tasks, description=description, return_exceptions=True
             )
-            _inputs = []
-            _indices = []
             for i, task in enumerate(tasks):
-                if task.exception() and self._retry <= self.max_retries:
+                if task.exception() and self._retry < self.max_retries:
                     _inputs.append(inputs[i])
                     _indices.append(i)
+        self._retry += 1
         if _inputs:
-            if self.verbose:
-                logger.debug(f"retrying {len(_inputs)} states")
-            await asyncio.sleep(self.wait)
+            logger.debug(f"retrying {len(_inputs)} states, attempt {self._retry}")
             _answers = await self.execute(
                 *_inputs,
                 description=f"Retrying {len(_inputs)} samples, attempt {self._retry}",
