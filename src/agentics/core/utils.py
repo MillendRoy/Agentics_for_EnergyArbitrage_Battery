@@ -472,6 +472,12 @@ def pretty_print_atype(atype, indent: int = 2):
         print(f"{prefix}]")
 
 
+def is_list_of_str(input):
+    return isinstance(input, str) or (
+        isinstance(input, Iterable) and all(isinstance(i, str) for i in input)
+    )
+
+
 async def gather_with_progress(
     coros: Iterable[Awaitable[Any]],
     description: str = "Working",
