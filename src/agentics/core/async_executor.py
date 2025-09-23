@@ -37,14 +37,14 @@ class AsyncExecutor(ABC):
         if len(inputs) == 1:
             # singular input awaits a single async call
             try:
-                answers = await asyncio.wait_for(
+                return await asyncio.wait_for(
                     self._execute(inputs[0]), timeout=self.timeout
                 )
             except Exception as e:
                 if isinstance(e, Exception) and self._retry < self.max_retries:
                     _indices = [0]
                     _inputs = [inputs[0]]
-                answers = e
+                answers = [e]
         else:
             # A list of inputs gathers all async calls as tasks
             tasks = [
@@ -62,10 +62,10 @@ class AsyncExecutor(ABC):
                     _indices.append(i)
         self._retry += 1
         if _inputs:
-            logger.debug(f"retrying {len(_inputs)} states, attempt {self._retry}")
+            logger.debug(f"retrying {len(_inputs)} state(s), attempt {self._retry}")
             _answers = await self.execute(
                 *_inputs,
-                description=f"Retrying {len(_inputs)} samples, attempt {self._retry}",
+                description=f"Retrying {len(_inputs)} state(s), attempt {self._retry}",
             )
             for i, answer in zip(_indices, _answers):
                 answers[i] = answer
@@ -96,7 +96,7 @@ class PydanticTransducer(AsyncExecutor):
     async def execute(self, *inputs: str, **kwargs) -> List[BaseModel]:
         """Pydantic transduction always returns a list of pydantic models"""
         output = await super().execute(*inputs, **kwargs)
-        if len(inputs) == 1:
+        if not isinstance(output, list):
             output = [output]
         return output
 
