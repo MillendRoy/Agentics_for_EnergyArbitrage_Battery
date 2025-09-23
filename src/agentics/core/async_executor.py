@@ -65,7 +65,8 @@ class AsyncExecutor(ABC):
                 logger.debug(f"retrying {len(_inputs)} states")
             await asyncio.sleep(self.wait)
             _answers = await self.execute(
-                *_inputs, description=f"Retrying {len()} samples, attempt {self._retry}"
+                *_inputs,
+                description=f"Retrying {len(_inputs)} samples, attempt {self._retry}",
             )
             for i, answer in zip(_indices, _answers):
                 answers[i] = answer
