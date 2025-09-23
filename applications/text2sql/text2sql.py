@@ -106,7 +106,7 @@ async def execute_alternative_sql(state:Text2sqlQuestion)-> Text2sqlQuestion:
 async def select_best_answer(state:Text2sqlQuestion)-> Text2sqlQuestion:
     best_selected_score = 0
     selected_best_answer=None
-    for answer in state.alternative_answer_assessments + [state.answer_assessment]:
+    for answer in state.alternative_answer_assessments + ([state.answer_assessment] if state.answer_assessment else []):
         if answer.answer_quality_score and answer.answer_quality_score > best_selected_score:
         
             selected_best_answer=answer
@@ -115,6 +115,42 @@ async def select_best_answer(state:Text2sqlQuestion)-> Text2sqlQuestion:
         state.generated_query=selected_best_answer.sql
     return state
 
+async def perform_answer_validation(test:AG, n_queries:int=5)-> AG:
+        
+    test = await test.self_transduction(
+            ["question","db_id", "schema","evidence", "commonsense_knowledge","answer_assessment"],
+            ["alternative_sql_queries"], 
+            instructions=f"""You previously generated , run , executed and assessed a SQL query needed to get 
+            information to answer a given utterance. Your task is to formulate {n_queries} alternative SQL queries that 
+            have better chances to gather the information needed to answer the given question.""")
+    
+    test = await test.amap(execute_alternative_sql)
+    test = await test.amap(select_best_answer)
+    test= await test.amap(execute_query_map)
+    return test
+
+
+async def execute_multiple_queries(test:AG, n_queries:int=5)-> AG:
+    
+    test = await test.self_transduction(
+            ["question","db_id", "schema","evidence", "commonsense_knowledge"],
+            ["alternative_sql_queries"], 
+            instructions=f""""Your task is to convert a natural language question into an accurate SQL query using the given the database schema.\n\n"
+            "**Instructions:**\n"
+            "- Only use columns listed in the schema.\n"
+            "- Do not use any other columns or tables not mentioned in the schema.\n"
+            "- Ensure the SQL query is valid and executable.\n"
+            "- Use proper SQL syntax and conventions.\n"
+            "- Generate a complete SQL query that answers the question.\n"
+            "- Use the correct SQL dialect for SQLite \n"
+            "- Do not include any explanations or comments in the SQL output.\n"
+            "- Generate 5 alternative sql queries that you will later execute and validate to pick the best one. 
+    )""")
+    
+    test = await test.amap(execute_alternative_sql)
+    test = await test.amap(select_best_answer)
+    test= await test.amap(execute_query_map)
+    return test
 
 
 async def execute_questions(test:AG, 
@@ -131,8 +167,24 @@ async def execute_questions(test:AG,
     ## add training data
     test.states= training.states+test.states
     test= await test.amap(get_schema_map)
-    test.batch_size=10
+    
     test.verbose_agent=False
+
+    test = await baseline_zero_shot(test)
+
+    if answer_validation == True:
+        test = await perform_answer_validation(test)
+
+    
+    
+    print(f"task executed in {time.time() - begin_time} seconds")
+    test.states=test.states[len(training.states):]
+    return test
+
+
+
+
+async def baseline_zero_shot(test:AG)-> AG:
 
     test = await test.self_transduction(
         ["question","db_id", "schema","evidence","commonsense_knowledge"], 
@@ -148,31 +200,8 @@ async def execute_questions(test:AG,
             "- Use the correct SQL dialect for SQLite \n"
             "- Do not include any explanations or comments in the SQL output.\n"
     )
-        
     test= await test.amap(execute_query_map)
-
-    if answer_validation == True:
-
-        test = await test.self_transduction(["question","db_id", "schema","evidence", "system_output_df"], ["answer_assessment"])
-        
-        test = await test.self_transduction(
-                ["question","db_id", "schema","evidence", "commonsense_knowledge","answer_assessment"],
-                ["alternative_sql_queries"], 
-                instructions="""You previously generated , run , executed and assessed a SQL query needed to get 
-                information to answer a given utterance. Your task is to formulate 5 alternative SQL queries that 
-                have better chances to gather the information needed to answer the given question.""")
-        
-        test = await test.amap(execute_alternative_sql)
-        test = await test.amap(select_best_answer)
-        test= await test.amap(execute_query_map)
-
-
-    
-    
-    print(f"task executed in {time.time() - begin_time} seconds")
-    test.states=test.states[len(training.states):]
     return test
-
 
 
 async def run_evaluation_benchmark(benchmark_id = "archer_en_dev",
@@ -199,5 +228,5 @@ async def run_evaluation_benchmark(benchmark_id = "archer_en_dev",
         return test
         
 
-test = AG.from_jsonl("/Users/gliozzo/Data/Text2SQL/Experiments/bird_mini_dev_sqlite_baseline.jsonl", atype=Text2sqlQuestion)
-evaluate_execution_accuracy(test)
+# test = AG.from_jsonl("/Users/gliozzo/Data/Text2SQL/Experiments/bird_mini_dev_sqlite_baseline.jsonl", atype=Text2sqlQuestion)
+# evaluate_execution_accuracy(test)

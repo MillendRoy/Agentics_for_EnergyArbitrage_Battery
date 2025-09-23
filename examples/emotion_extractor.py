@@ -36,7 +36,7 @@ def split_into_chunks(text, chunk_size=200):
 async def main():
 
     emotion_detector = AG(
-        atype=EmotionDector, llm=AG.get_llm_provider(), batch_size_transduction=20
+        atype=EmotionDector, llm=AG.get_llm_provider()
     )
 
     current_file = Path(__file__).resolve()

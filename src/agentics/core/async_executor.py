@@ -88,6 +88,7 @@ class aMap(AsyncExecutor):
     async def _execute(self, state: BaseModel, **kwargs) -> BaseModel:
         """Function Tranduction (amap) returns a pydantic model"""
         output = await self.func(state, **kwargs)
+        logger.debug("Processed Amap State")
         return output
 
 
