@@ -38,6 +38,7 @@ from agentics.core.mapping import AttributeMapping, ATypeMapping
 from agentics.core.utils import (
     clean_for_json,
     get_active_fields,
+    is_list_of_str,
     make_all_fields_optional,
     pydantic_model_from_csv,
     pydantic_model_from_dataframe,
@@ -184,28 +185,19 @@ class AG(BaseModel, Generic[T]):
 
     async def amap(self, func: StateOperator, timeout=None) -> AG:
         """Asynchronous map with exception-safe job gathering"""
-        if self.verbose_transduction:
-            logger.debug(f"Executing amap on function {func}")
 
         mapper = aMap(func=func, timeout=timeout)
-        begin_time = time.time()
         try:
-            results = await mapper.execute(*self.states)
+            results = await mapper.execute(
+                *self.states, description=f"Executing amap on {func.__name__}"
+            )
             if self.transduction_logs_path:
                 with open(self.transduction_logs_path, "a") as f:
                     for state in results:
                         f.write(state.model_dump_json() + "\n")
 
-        except Exception as e:
-            if self.verbose_transduction:
-                logger.debug(str(e))
+        except Exception:
             results = self.states
-
-        end_time = time.time()
-        if self.verbose_transduction:
-            logger.debug(
-                f"{len(self.states)} states processed. {(end_time - begin_time) / len(self.states): 0.4f} seconds average per state"
-            )
 
         _states = []
         n_errors = 0
@@ -213,7 +205,7 @@ class AG(BaseModel, Generic[T]):
             if isinstance(result, Exception):
                 if self.verbose_transduction:
                     logger.debug(f"⚠️ Error processing state {i}: {result}")
-                _states.append(self[i])
+                _states.append(self.states[i])
                 n_errors += 1
             else:
                 _states.append(result)
@@ -470,11 +462,6 @@ class AG(BaseModel, Generic[T]):
             else self.atype
         )
         if isinstance(other, AG):
-            if self.verbose_transduction:
-                logger.debug(
-                    f"Executing task: {self.instructions}\n{len(other.states)} states will be transduced"
-                )
-
             if other.prompt_template:
                 prompt_template = PromptTemplate.from_template(other.prompt_template)
             else:
@@ -496,15 +483,9 @@ class AG(BaseModel, Generic[T]):
                         )
                     )
 
-        elif isinstance(other, str) or (
-            isinstance(other, Iterable) and all(isinstance(i, str) for i in other)
-        ):
+        elif is_list_of_str(other):
             if isinstance(other, str):
                 other = [other]
-            if self.verbose_transduction:
-                logger.debug(
-                    f"Transduction from input texts {other} to {type(target_type)} in progress. This might take a while"
-                )
             input_prompts = ["\nSOURCE:\n" + x for x in other]
         else:
             return NotImplemented
@@ -563,10 +544,7 @@ class AG(BaseModel, Generic[T]):
             if type(self.llm) == LLM
             else PydanticTransducerVLLM
         )
-        if self.verbose_transduction:
-            logger.debug(f"transducer class: {transducer_class}")
         try:
-            begin_time = time.time()
             transduced_type = (
                 self.subset_atype(self.transduce_fields)
                 if self.transduce_fields
@@ -583,15 +561,12 @@ class AG(BaseModel, Generic[T]):
                 reasoning=self.reasoning,
                 **self.crew_prompt_params,
             )
-            transduced_results = await pt.execute(*input_prompts)
-            end_time = time.time()
-            if self.verbose_transduction:
-                logger.debug(
-                    f"Processed {len(input_prompts)} states in {end_time - begin_time:0.4f} seconds"
-                )
-        except Exception as e:
-            if self.verbose_transduction:
-                logger.debug(str(e))
+            transduced_results = await pt.execute(
+                *input_prompts,
+                description=f"Transducing  {self.atype.__name__} << {
+                    str(other[0])+' ...' if is_list_of_str(other) else other.atype.__name__}",
+            )
+        except Exception:
             transduced_results = self.states
 
         n_errors = 0
@@ -630,7 +605,7 @@ class AG(BaseModel, Generic[T]):
                     **(self[i].model_dump() | other[i].model_dump() | output_state_dict)
                 )
                 output.states.append(merged)
-        elif isinstance(other, Iterable) and all(isinstance(i, str) for i in other):
+        elif is_list_of_str(other):
             for i in range(len(other)):
                 if isinstance(output_states[i], self.atype):
                     output.states.append(self.atype(**output_states[i].model_dump()))
@@ -814,7 +789,9 @@ class AG(BaseModel, Generic[T]):
 
     def to_jsonl(self, jsonl_file: str) -> Any:
         if self.verbose_transduction:
-            logger.debug(f"Exporting {len(self.states)} states or atype {self.atype} to {jsonl_file}")
+            logger.debug(
+                f"Exporting {len(self.states)} states or atype {self.atype} to {jsonl_file}"
+            )
         with open(jsonl_file, mode="w", newline="", encoding="utf-8") as f:
             for state in self.states:
                 try:

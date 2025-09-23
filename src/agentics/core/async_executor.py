@@ -12,7 +12,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from agentics.core.llm_connections import watsonx_llm
-from agentics.core.utils import openai_response
+from agentics.core.utils import gather_with_progress, openai_response
 
 load_dotenv()
 
@@ -30,7 +30,7 @@ class AsyncExecutor(ABC):
         [setattr(self, name, value) for name, value in kwargs.items()]
 
     async def execute(
-        self, *inputs: Union[BaseModel, str]
+        self, *inputs: Union[BaseModel, str], description: str = "Executing"
     ) -> Union[BaseModel, Iterable[BaseModel]]:
         self._retry += 1
         _inputs = []
@@ -51,7 +51,9 @@ class AsyncExecutor(ABC):
                 )
                 for i in inputs
             ]
-            answers = await asyncio.gather(*tasks, return_exceptions=True)
+            answers = await gather_with_progress(
+                tasks, description=description, return_exceptions=True
+            )
             _inputs = []
             _indices = []
             for i, task in enumerate(tasks):
@@ -62,7 +64,9 @@ class AsyncExecutor(ABC):
             if self.verbose:
                 logger.debug(f"retrying {len(_inputs)} states")
             await asyncio.sleep(self.wait)
-            _answers = await self.execute(*_inputs)
+            _answers = await self.execute(
+                *_inputs, description=f"Retrying {len()} samples, attempt {self._retry}"
+            )
             for i, answer in zip(_indices, _answers):
                 answers[i] = answer
 
@@ -89,9 +93,9 @@ class aMap(AsyncExecutor):
 
 class PydanticTransducer(AsyncExecutor):
 
-    async def execute(self, *inputs: str) -> List[BaseModel]:
+    async def execute(self, *inputs: str, **kwargs) -> List[BaseModel]:
         """Pydantic transduction always returns a list of pydantic models"""
-        output = await super().execute(*inputs)
+        output = await super().execute(*inputs, **kwargs)
         if len(inputs) == 1:
             output = [output]
         return output
