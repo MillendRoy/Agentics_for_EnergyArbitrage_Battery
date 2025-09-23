@@ -77,7 +77,7 @@ ollama pull ollama/deepseek-r1:latest
 test hello world example (need to set up llm credentials first)
 
 ```bash
-python src/agentics/examples/hello_world.py
+python python examples/hello_world.py
 ```
 
 this will return something like 
