@@ -566,15 +566,13 @@ class AG(BaseModel, Generic[T]):
                 description=f"Transducing  {self.atype.__name__} << {
                     str(other[0])+' ...' if is_list_of_str(other) else other.atype.__name__}",
             )
-        except Exception:
+        except Exception as e:
             transduced_results = self.states
 
         n_errors = 0
         output_states = []
         for i, result in enumerate(transduced_results):
             if isinstance(result, Exception):
-                if self.verbose_transduction:
-                    logger.debug(f"⚠️ Error processing state {i}: {result}")
                 output_states.append(
                     self.states[i] if i < len(self.states) else target_type()
                 )
@@ -583,7 +581,7 @@ class AG(BaseModel, Generic[T]):
                 output_states.append(result)
         if self.verbose_transduction:
             if n_errors:
-                logger.debug(f"ERROR, {n_errors} states have not been transduced")
+                logger.debug(f"⚠️  {n_errors} states have not been transduced")
 
         if self.transduction_logs_path:
             with open(self.transduction_logs_path, "a") as f:
