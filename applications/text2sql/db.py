@@ -4,9 +4,10 @@ from typing import Dict, Optional, Union, List, Any
 
 import aiosqlite, sqlite3
 from pydantic import BaseModel, Field
+from loguru import logger
 
 from agentics import AG
-from utils import execute_sql_on_endpoint
+from utils import execute_sql_on_endpoint, quote_ident,map_type
 
 class Target(BaseModel):
     """Represent the results of the execution of a text2sql task, where the target is the ground truth"""
@@ -23,22 +24,7 @@ import os
 from abc import ABC, abstractmethod
 
 import pandas as pd
-from pandas import DataFrame
 
-
-BIRD_DBS_DEV = [
-    "california_schools",
-    "european_football_2",
-    "debit_card_specializing",
-    "student_club",
-    "superhero",
-    "financial",
-    "formula_1",
-    "codebase_community",
-    "card_games",
-    "thrombosis_prediction",
-    "toxicology",
-]
 class Column(BaseModel):
     table:Optional[str]=None
     column_name:Optional[str]=None
@@ -77,7 +63,7 @@ class DBSchema(BaseModel):
             if table is None:
                 continue
             table_name = table.name or tname
-            q_table = _quote_ident(table_name, dialect)
+            q_table = quote_ident(table_name, dialect)
 
             if include_drop:
                 if dialect == "sqlite":
@@ -95,8 +81,8 @@ class DBSchema(BaseModel):
                 if col is None:
                     continue
                 col_name = col.column_name or cname
-                q_col = _quote_ident(col_name, dialect)
-                sql_type = _map_type(col.type, dialect)
+                q_col = quote_ident(col_name, dialect)
+                sql_type = map_type(col.type, dialect)
 
                 if dialect == "mysql" and col.description:
                     cols.append(f"{q_col} {sql_type} COMMENT {repr(col.description)}")
@@ -123,7 +109,7 @@ class DBSchema(BaseModel):
             if dialect == "postgres":
                 for cname, col in sorted((table.columns or {}).items(), key=lambda kv: kv[0]):
                     if col and col.description:
-                        q_col = _quote_ident(col.column_name or cname, dialect)
+                        q_col = quote_ident(col.column_name or cname, dialect)
                         lines.append(f"COMMENT ON COLUMN {q_table}.{q_col} IS {repr(col.description)};")
             elif dialect == "sqlite":
                 # SQLite: use comments as inline '--' annotations
@@ -133,85 +119,22 @@ class DBSchema(BaseModel):
         return "\n".join(lines)
 
 
-# ----- DDL generator -----
-def _quote_ident(name: str, dialect: str) -> str:
-    if name is None:
-        raise ValueError("Identifier cannot be None")
-    return {
-        "sqlite": f'"{name}"',
-        "postgres": f'"{name}"',
-        "mysql": f'`{name}`',
-    }.get(dialect, f'"{name}"')
 
-def _map_type(gen_type: Optional[str], dialect: str) -> str:
-    t = (gen_type or "str").lower()
-    # Generic -> SQL type mapping
-    if dialect == "sqlite":
-        mapping = {
-            "str": "TEXT",
-            "text": "TEXT",
-            "int": "INTEGER",
-            "integer": "INTEGER",
-            "float": "REAL",
-            "double": "REAL",
-            "bool": "INTEGER",        # SQLite has no native BOOL; 0/1
-            "boolean": "INTEGER",
-            "date": "TEXT",           # or NUMERIC with check/format
-            "datetime": "TEXT",
-            "timestamp": "TEXT",
-            "json": "TEXT",           # use JSON1 functions if enabled
-        }
-    elif dialect == "postgres":
-        mapping = {
-            "str": "VARCHAR",
-            "text": "TEXT",
-            "int": "INTEGER",
-            "integer": "INTEGER",
-            "float": "DOUBLE PRECISION",
-            "double": "DOUBLE PRECISION",
-            "bool": "BOOLEAN",
-            "boolean": "BOOLEAN",
-            "date": "DATE",
-            "datetime": "TIMESTAMP",
-            "timestamp": "TIMESTAMP",
-            "json": "JSONB",
-        }
-    elif dialect == "mysql":
-        mapping = {
-            "str": "VARCHAR(255)",
-            "text": "TEXT",
-            "int": "INT",
-            "integer": "INT",
-            "float": "DOUBLE",
-            "double": "DOUBLE",
-            "bool": "TINYINT(1)",
-            "boolean": "TINYINT(1)",
-            "date": "DATE",
-            "datetime": "DATETIME",
-            "timestamp": "TIMESTAMP",
-            "json": "JSON",
-        }
-    else:
-        raise ValueError(f"Unsupported dialect: {dialect}")
-    return mapping.get(t, mapping["str"])
+# class QueryExecution(BaseModel):
+#     question: Optional[str] = ""
+#     sql_query: Optional[str] = ""
+#     output_dataframe: Optional[Union[List[Dict[str, Any]], Dict[str, Any]]] = None
+#     error_message: Optional[str] = None
+#     answer_quality_assessment: Optional[str] = Field(
+#         None,
+#         description="A verbal judgment on the quality of the output dataframe for the provided answer",
+#     )
+#     answer_quality_score: Optional[float] = Field(0)
+#     db_name: Optional[str] = None
 
-
-
-class QueryExecution(BaseModel):
-    question: Optional[str] = ""
-    sql_query: Optional[str] = ""
-    output_dataframe: Optional[Union[List[Dict[str, Any]], Dict[str, Any]]] = None
-    error_message: Optional[str] = None
-    answer_quality_assessment: Optional[str] = Field(
-        None,
-        description="A verbal judgment on the quality of the output dataframe for the provided answer",
-    )
-    answer_quality_score: Optional[float] = Field(0)
-    db_name: Optional[str] = None
-
-class QuestionSQLPair(BaseModel):
-    question: Optional[str] = None
-    sql_query: Optional[str] = None
+# class QuestionSQLPair(BaseModel):
+#     question: Optional[str] = None
+#     sql_query: Optional[str] = None
 
 
 
@@ -236,26 +159,29 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
         None,
         description="""A Description of the business purpose of the db, what use cases it is good for how what type of information it contain""",
     )
+    db_schema:Optional[DBSchema]=DBSchema()
+
     datasource_id: Optional[str] = None
-    sample_queries: Optional[list[QueryExecution]] = None
-    natural_language_questions: Optional[list[str]] = Field(
-        [],
-        description="""A list of natural language questions that could be answered from the provided DDL.""",
-    )
-    sql_queries: Optional[list[str]] = Field(
-        [],
-        description="SQL queries that can be used to answer the questions above. Introduce where clasuses based on the sample values in the",
-    )
-    few_shots: Optional[list[QuestionSQLPair]] = Field(
-        [], description="A selection of the generated"
-    )
+    enrichment_path: Optional[str] = None
+    #sample_queries: Optional[list[QueryExecution]] = None
+    # natural_language_questions: Optional[list[str]] = Field(
+    #     [],
+    #     description="""A list of natural language questions that could be answered from the provided DDL.""",
+    # )
+    # sql_queries: Optional[list[str]] = Field(
+    #     [],
+    #     description="SQL queries that can be used to answer the questions above. Introduce where clasuses based on the sample values in the",
+    # )
+    # few_shots: Optional[list[QuestionSQLPair]] = Field(
+    #     [], description="A selection of the generated"
+    # )
     ddl: Optional[Union[str, list[str]]] = None
-    tables: Optional[Dict[str, str]] = {}
+    # tables: Optional[Dict[str, str]] = {}
     endpoint_id:Optional[str]=None
     db_path:Optional[str]=None
     benchmark_id:Optional[str]=None
     db_id:Optional[str]=None
-    db_schema:Optional[DBSchema]=DBSchema()
+    
 
 
     # @abstractmethod
@@ -400,61 +326,72 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
         
         self = dbs[0]
         return self
+    
+
+    async def load_enrichments(self):
+        if not self.enrichment_path:
+            self.enrichment_path = os.path.join(os.getenv("SQL_DB_PATH"),self.benchmark_id, 
+                                    self.db_id,self.db_id+"_enriched.json" )
+        if not self.db_path:
+            self.db_path = os.path.join(os.getenv("SQL_DB_PATH"),self.benchmark_id, 
+                            self.db_id,self.db_id+".sqlite" )
+        try:
+            with open(self.enrichment_path, "r", encoding="utf-8") as f:
+                db_dict = json.load(f)
+                db=DB(**db_dict)
+        except:
+            logger.error(f"Failed to load enrichments from file {self.enrichment_path}. Generating new Enrichments")
+            db=DB(benchmark_id=self.benchmark_id,endpoint_id=self.endpoint_id,db_id=self.db_id, db_path=self.db_path)
+            db = db.get_schema_from_sqllite()
+            db = await db.generate_db_description()
+            db = await db.get_schema_enrichments()
+            db.ddl = db.db_schema.generate_ddl()
+            with open(self.enrichment_path, "w") as f: f.write(db.model_dump_json())
+        self = db
+        return db 
+            
         
+                
 
 
-    async def generate_questions(self, n_questions: int = 10):
-        dbs = AG(atype=DB, states=[self])
 
-        dbs = await dbs.self_transduction(
-            ["db_name", "ddl", "tables"],
-            ["database_schema_description", "business_description", "keywords"],
-            instructions=f"""Generate the required description of the DB from the input ddl.""",
-        )
+    # async def generate_questions(self, n_questions: int = 10):
+    #     dbs = AG(atype=DB, states=[self])
 
-        natural_language_questions = []
-        sql_queries = []
-        for keyword in dbs[0].keywords:
-            dbs = await dbs.self_transduction(
-                [
-                    "db_name",
-                    "ddl",
-                    "tables",
-                    "database_schema_description",
-                    "business_description",
-                ],
-                ["natural_language_questions", "sql_queries"],
-                instructions=f"""Generate {n_questions} natural language questions that can be answered 
-                by issuing SQL queries to the provided database about the keyword {keyword}.""",
-            )
-            natural_language_questions += dbs[0].natural_language_questions
-            sql_queries += dbs[0].sql_queries
-        dbs[0].natural_language_questions = natural_language_questions
-        dbs[0].sql_queries = sql_queries
-        questions = dbs[0].natural_language_questions
+    #     dbs = await dbs.self_transduction(
+    #         ["db_name", "ddl", "tables"],
+    #         ["database_schema_description", "business_description", "keywords"],
+    #         instructions=f"""Generate the required description of the DB from the input ddl.""",
+    #     )
 
-        for i, sql_query in enumerate(dbs[0].sql_queries):
-            query_execution = await self.async_execute_sql(sql_query)
-            if type(query_execution) == DataFrame:
-                if len(query_execution.notnull().values) and len(questions) > i:
-                    dbs[0].few_shots.append(
-                        QuestionSQLPair(question=questions[i], sql_query=sql_query)
-                    )
-        return dbs[0]
+    #     natural_language_questions = []
+    #     sql_queries = []
+    #     for keyword in dbs[0].keywords:
+    #         dbs = await dbs.self_transduction(
+    #             [
+    #                 "db_name",
+    #                 "ddl",
+    #                 "tables",
+    #                 "database_schema_description",
+    #                 "business_description",
+    #             ],
+    #             ["natural_language_questions", "sql_queries"],
+    #             instructions=f"""Generate {n_questions} natural language questions that can be answered 
+    #             by issuing SQL queries to the provided database about the keyword {keyword}.""",
+    #         )
+    #         natural_language_questions += dbs[0].natural_language_questions
+    #         sql_queries += dbs[0].sql_queries
+    #     dbs[0].natural_language_questions = natural_language_questions
+    #     dbs[0].sql_queries = sql_queries
+    #     questions = dbs[0].natural_language_questions
 
-
-def enrich_dbs(db_list: list[str] = BIRD_DBS_DEV, db_type: str = "bird_dev") -> "AG":
-    start_time = time.time()
-    dbs = AG(atype=DB)
-    for db in db_list:
-        dbs.states.append(DB.load_db(db_type, db_name=db))
-
-    dbs = asyncio.run(dbs.amap(lambda x: x.generate_questions(n_questions=5)))
-    end_time = time.time()
-    print(f"Enrichment of {len(dbs.states)} dbs took {end_time - start_time} seconds")
-    return dbs
+    #     for i, sql_query in enumerate(dbs[0].sql_queries):
+    #         query_execution = await self.async_execute_sql(sql_query)
+    #         if type(query_execution) == DataFrame:
+    #             if len(query_execution.notnull().values) and len(questions) > i:
+    #                 dbs[0].few_shots.append(
+    #                     QuestionSQLPair(question=questions[i], sql_query=sql_query)
+    #                 )
+    #     return dbs[0]
 
 
-# if __name__ == "__main__":
-#     dbs = enrich_dbs()
-#     dbs.to_jsonl("/tmp/enriched_dbs.jsonl")
