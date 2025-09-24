@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 import random
 sys.path.append(str(Path(__file__).resolve().parent))
-from utils import get_schema_from_sqllite, get_schema_from_file, async_execute_sql, evaluate_execution_accuracy
+from utils import get_schema_from_sqllite, get_schema_from_file, async_execute_sql, evaluate_execution_accuracy2
 from crewai.tools import tool
 from agentics import AG
 from db import DB
@@ -192,12 +192,15 @@ async def execute_questions(test:AG,
                             enrichments:bool=True, 
                             multiple_runs:int = 1,
                             save_run_path:str=None):
+    save_test=test.clone()
+    total_accuracy = 0
     for run in range(multiple_runs):
+        test=save_test
         begin_time=time.time()
         training = AG(atype=Text2sqlQuestion)
         if few_shots_path:
             training = get_training_data(few_shots_path)
-        test.llm=AG.get_llm_provider("watsonx")
+        #save_test.llm=AG.get_llm_provider("watsonx")
         test.reasoning=False
         # test.tools=[execute_sql_query]
         # test.max_iter=10
@@ -214,12 +217,25 @@ async def execute_questions(test:AG,
         if answer_validation == True:
             test = await perform_answer_validation(test)
         
-        output_file = os.path.join(save_run_path, f"exp_{run}.jsonl")
-        test.to_jsonl(output_file)
+        if save_run_path:
+            if not os.path.exists(save_run_path): os.mkdir(save_run_path)
+            output_file = os.path.join(save_run_path, f"exp_{run}.jsonl")
+            test.to_jsonl(output_file)
+           
+            experiment_evaluation_output=os.path.join(save_run_path, f"exp_{run}_eval.txt")
         
         print(f"task executed in {time.time() - begin_time} seconds")
         test.states=test.states[len(training.states):]
-        return test
+       
+        accuracy, full_eval = evaluate_execution_accuracy2(test)
+        total_accuracy +=accuracy
+        if save_run_path:
+            experiment_evaluation_output=os.path.join(save_run_path, f"exp_{run}_eval.txt")
+            with open(experiment_evaluation_output,"w") as f:
+                f.write(full_eval+"\n")
+        
+    print(f"Average execution accuracy: {total_accuracy/multiple_runs}")
+    return test , total_accuracy/multiple_runs
 
 
 
@@ -264,7 +280,7 @@ async def run_evaluation_benchmark(benchmark_id = "archer_en_dev",
         test.states=new_states
 
         test = await execute_questions(test, few_shots_path=few_shots_path)
-        print(evaluate_execution_accuracy(test))
+        print(evaluate_execution_accuracy2(test))
         return test
         
 
