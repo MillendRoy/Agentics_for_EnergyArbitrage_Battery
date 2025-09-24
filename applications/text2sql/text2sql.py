@@ -12,6 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parent))
 from utils import get_schema_from_sqllite, get_schema_from_file, async_execute_sql, evaluate_execution_accuracy
 from crewai.tools import tool
 from agentics import AG
+from db import DB
 
 from crewai_tools import MCPServerAdapter
 from agentics import AG
@@ -32,12 +33,15 @@ class Text2sqlQuestion(BaseModel):
     question: Optional[str] =None
     db_id: Optional[str] =None
     benchmark_id: Optional[str] =None
+
     sql: Optional[Union[str,list[str]]] =None
+    ddl: Optional[str] =None
     query: Optional[str] =None
     evidence: Optional[Union[str,list[str]]]=None
     reasoning_type: Optional[str] =None
     commonsense_knowledge: Optional[str] =None
-    schema: Optional[str] = None
+    #schema: Optional[str] = None
+    db:Optional[DB] = None
     alternative_sql_queries: Optional[List[str]] = Field(
         None, 
         description="""Generate alternative 5 SQL queries that have higher chances to 
@@ -51,10 +55,36 @@ class Text2sqlQuestion(BaseModel):
     gt_output_df: Optional[str] = None
 
 
-async def get_schema_map(state:Text2sqlQuestion)-> Text2sqlQuestion:
+async def get_schema(state:Text2sqlQuestion)-> Text2sqlQuestion:
+    schema_path = os.path.join(os.getenv("SQL_DB_PATH"), state.benchmark_id ,
+                                state.db_id,state.db_id+".sqlite" )
+    state.db = DB(db_id=state.db_id, benchmark_id=state.benchmark_id, db_path=schema_path)
+    state.db.get_schema_from_sqllite()
+    state.ddl=state.db.ddl
+    return state
+
+async def enrich_all_dbs(test:AG):
+    dbs=set()
+    filtered_test=AG(atype=Text2sqlQuestion)
+    for question in test:
+        #print(question.db_id)
+        if question.db_id not in dbs:
+            filtered_test.states.append(question)
+            dbs.add(question.db_id)
+
+    await filtered_test.amap(load_db)
+
+
+async def load_db(state:Text2sqlQuestion)-> Text2sqlQuestion:
     # schema_path = os.path.join(os.getenv("SQL_DB_PATH"), 
     #                         state.db_id,state.db_id+".sqlite" )
-    state.schema = str(get_schema_from_file(state.benchmark_id, state.db_id))
+    if not state.db:
+        state = await get_schema(state)
+        state.ddl=state.db.db_schema.model_dump_json()
+    return state
+async def enrich_db(state:Text2sqlQuestion)-> Text2sqlQuestion:
+    state.db= await state.db.load_enrichments()
+    state.ddl = state.db.db_schema.model_dump_json()
     return state
 
 ## Define a Crew AI tool to get news for a given date using the DDGS search engine
@@ -152,34 +182,44 @@ async def execute_multiple_queries(test:AG, n_queries:int=5)-> AG:
     test= await test.amap(execute_query_map)
     return test
 
+# async def get_enrichment_map(test:AG):
+#     for question in test:
+
 
 async def execute_questions(test:AG, 
                             few_shots_path:str = None,
-                            answer_validation: bool = True):
-    begin_time=time.time()
-    training = AG(atype=Text2sqlQuestion)
-    if few_shots_path:
-        training = get_training_data(few_shots_path)
-    test.llm=AG.get_llm_provider("watsonx")
-    test.reasoning=False
-    # test.tools=[execute_sql_query]
-    # test.max_iter=10
-    ## add training data
-    test.states= training.states+test.states
-    test= await test.amap(get_schema_map)
+                            answer_validation: bool = True,
+                            enrichments:bool=True, 
+                            multiple_runs:int = 1,
+                            save_run_path:str=None):
+    for run in range(multiple_runs):
+        begin_time=time.time()
+        training = AG(atype=Text2sqlQuestion)
+        if few_shots_path:
+            training = get_training_data(few_shots_path)
+        test.llm=AG.get_llm_provider("watsonx")
+        test.reasoning=False
+        # test.tools=[execute_sql_query]
+        # test.max_iter=10
+        ## add training data
+        test.states= training.states+test.states
+        
+        
     
-    test.verbose_agent=False
+        test= await test.amap(load_db)
+        if enrichments:
+            test=await test.amap(enrich_db)
+        test = await baseline_zero_shot(test)
 
-    test = await baseline_zero_shot(test)
-
-    if answer_validation == True:
-        test = await perform_answer_validation(test)
-
-    
-    
-    print(f"task executed in {time.time() - begin_time} seconds")
-    test.states=test.states[len(training.states):]
-    return test
+        if answer_validation == True:
+            test = await perform_answer_validation(test)
+        
+        output_file = os.path.join(save_run_path, f"exp_{run}.jsonl")
+        test.to_jsonl(output_file)
+        
+        print(f"task executed in {time.time() - begin_time} seconds")
+        test.states=test.states[len(training.states):]
+        return test
 
 
 
@@ -187,7 +227,7 @@ async def execute_questions(test:AG,
 async def baseline_zero_shot(test:AG)-> AG:
 
     test = await test.self_transduction(
-        ["question","db_id", "schema","evidence","commonsense_knowledge"], 
+        ["question","db_id", "ddl", "commonsense_knowledge"], 
         ["generated_query"], 
         instructions=
             "Your task is to convert a natural language question into an accurate SQL query using the given the database schema.\n\n"
@@ -223,10 +263,9 @@ async def run_evaluation_benchmark(benchmark_id = "archer_en_dev",
             new_states.append(state)
         test.states=new_states
 
-        test = await execute_questions(test, few_shots_path=few_shots_path, benchmark_id="archer_en_dev")
+        test = await execute_questions(test, few_shots_path=few_shots_path)
         print(evaluate_execution_accuracy(test))
         return test
         
 
-# test = AG.from_jsonl("/Users/gliozzo/Data/Text2SQL/Experiments/bird_mini_dev_sqlite_baseline.jsonl", atype=Text2sqlQuestion)
-# evaluate_execution_accuracy(test)
+

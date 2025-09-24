@@ -14,6 +14,69 @@ from loguru import logger
 load_dotenv()
 
 
+
+# ----- DDL generator -----
+def quote_ident(name: str, dialect: str) -> str:
+    if name is None:
+        raise ValueError("Identifier cannot be None")
+    return {
+        "sqlite": f'"{name}"',
+        "postgres": f'"{name}"',
+        "mysql": f'`{name}`',
+    }.get(dialect, f'"{name}"')
+
+def map_type(gen_type: Optional[str], dialect: str) -> str:
+    t = (gen_type or "str").lower()
+    # Generic -> SQL type mapping
+    if dialect == "sqlite":
+        mapping = {
+            "str": "TEXT",
+            "text": "TEXT",
+            "int": "INTEGER",
+            "integer": "INTEGER",
+            "float": "REAL",
+            "double": "REAL",
+            "bool": "INTEGER",        # SQLite has no native BOOL; 0/1
+            "boolean": "INTEGER",
+            "date": "TEXT",           # or NUMERIC with check/format
+            "datetime": "TEXT",
+            "timestamp": "TEXT",
+            "json": "TEXT",           # use JSON1 functions if enabled
+        }
+    elif dialect == "postgres":
+        mapping = {
+            "str": "VARCHAR",
+            "text": "TEXT",
+            "int": "INTEGER",
+            "integer": "INTEGER",
+            "float": "DOUBLE PRECISION",
+            "double": "DOUBLE PRECISION",
+            "bool": "BOOLEAN",
+            "boolean": "BOOLEAN",
+            "date": "DATE",
+            "datetime": "TIMESTAMP",
+            "timestamp": "TIMESTAMP",
+            "json": "JSONB",
+        }
+    elif dialect == "mysql":
+        mapping = {
+            "str": "VARCHAR(255)",
+            "text": "TEXT",
+            "int": "INT",
+            "integer": "INT",
+            "float": "DOUBLE",
+            "double": "DOUBLE",
+            "bool": "TINYINT(1)",
+            "boolean": "TINYINT(1)",
+            "date": "DATE",
+            "datetime": "DATETIME",
+            "timestamp": "TIMESTAMP",
+            "json": "JSON",
+        }
+    else:
+        raise ValueError(f"Unsupported dialect: {dialect}")
+    return mapping.get(t, mapping["str"])
+
 async def _endpoint_call(call: Literal["GET", "POST"], endpoint: str, **kwargs):
     api_key = os.getenv("ENDPOINT_API_KEY")
     url = f"{os.getenv('ENDPOINT_URL')}{endpoint}"
