@@ -20,8 +20,6 @@ st.header("Agentics Text2SQL")
 with st.sidebar:
     use_answer_validation=st.toggle("Answer Validation",value=False)
     use_enrichments=st.toggle("Enrichments",value=False)
-    number_of_queries=st.number_input("Number of SQL query attempts",value=5)
-
     
 
 def select_benchmark(benchmark_id):
@@ -63,7 +61,8 @@ with tab1:
         st.session_state.benchmark_id = st.selectbox("Choose your Benchmark", options=list(load_benchmark().keys()))
         n_questions = st.number_input("Max Questions",value =1000)
         select_benchmark_button = st.form_submit_button("Select Benchmark")
-        experiment_path=st.text_input("Experiments output path", value=None)
+        save_experiment_path=st.text_input("Save Experiments Path", value=None)
+        number_of_experiments=st.number_input("Average N experiments",value=5)
         evaluate_benchmark = st.form_submit_button("Evaluate Benchmark")
 
     if select_benchmark_button:
@@ -80,15 +79,15 @@ with tab1:
                 question.system_output_df=None
                 new_questions.append(question)
             st.session_state.benchmark_questions.states = new_questions
-            st.session_state.benchmark_questions = asyncio.run(execute_questions(
+            st.session_state.benchmark_questions, execution_accuracy = asyncio.run(execute_questions(
                 st.session_state.benchmark_questions, 
                 answer_validation=use_answer_validation,
                 enrichments=use_enrichments,
-                multiple_runs=4,
-                save_run_path="/tmp/"))
+                multiple_runs=number_of_experiments,
+                save_run_path=save_experiment_path))
             ex, text = evaluate_execution_accuracy2(st.session_state.benchmark_questions)
-            st.markdown(text)
-            if experiment_path: st.session_state.benchmark_questions.to_jsonl(experiment_path)
+            st.markdown(f"Average Execution Accuracy {execution_accuracy}")
+            #if save_experiment_path: st.session_state.benchmark_questions.to_jsonl(save_experiment_path)
         
 with tab2:
 
