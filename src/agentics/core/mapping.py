@@ -11,13 +11,13 @@ from pydantic import BaseModel, Field
 class AttributeMapping(BaseModel):
     """Generate a mapping from the source field in the source schema to the target attributes or the target schema"""
 
-    target_field: str = Field(
-        ..., description="The attribute of the source target that has to be mapped"
+    target_field: Optional[str] = Field(
+        None, description="The attribute of the source target that has to be mapped"
     )
 
     source_field: Optional[str] = Field(
         [],
-        description="A list of attributes from the source type that can be used as an input for a function transforming them into the target taype. Empty list if none of them apply",
+        description="The attribute from the source type that can be used as an input for a function transforming it into the target taype. Empty list if none of them apply",
     )
     explanation: Optional[str] = Field(
         None, description="""reasons why you identified this mapping"""

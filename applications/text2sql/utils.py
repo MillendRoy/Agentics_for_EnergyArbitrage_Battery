@@ -3,7 +3,7 @@ import json
 import os
 import re
 import sqlite3
-from typing import Literal, Set
+from typing import Literal, Set, Union, Optional
 
 import aiosqlite
 import pandas as pd
@@ -13,6 +13,69 @@ from loguru import logger
 
 load_dotenv()
 
+
+
+# ----- DDL generator -----
+def quote_ident(name: str, dialect: str) -> str:
+    if name is None:
+        raise ValueError("Identifier cannot be None")
+    return {
+        "sqlite": f'"{name}"',
+        "postgres": f'"{name}"',
+        "mysql": f'`{name}`',
+    }.get(dialect, f'"{name}"')
+
+def map_type(gen_type: Optional[str], dialect: str) -> str:
+    t = (gen_type or "str").lower()
+    # Generic -> SQL type mapping
+    if dialect == "sqlite":
+        mapping = {
+            "str": "TEXT",
+            "text": "TEXT",
+            "int": "INTEGER",
+            "integer": "INTEGER",
+            "float": "REAL",
+            "double": "REAL",
+            "bool": "INTEGER",        # SQLite has no native BOOL; 0/1
+            "boolean": "INTEGER",
+            "date": "TEXT",           # or NUMERIC with check/format
+            "datetime": "TEXT",
+            "timestamp": "TEXT",
+            "json": "TEXT",           # use JSON1 functions if enabled
+        }
+    elif dialect == "postgres":
+        mapping = {
+            "str": "VARCHAR",
+            "text": "TEXT",
+            "int": "INTEGER",
+            "integer": "INTEGER",
+            "float": "DOUBLE PRECISION",
+            "double": "DOUBLE PRECISION",
+            "bool": "BOOLEAN",
+            "boolean": "BOOLEAN",
+            "date": "DATE",
+            "datetime": "TIMESTAMP",
+            "timestamp": "TIMESTAMP",
+            "json": "JSONB",
+        }
+    elif dialect == "mysql":
+        mapping = {
+            "str": "VARCHAR(255)",
+            "text": "TEXT",
+            "int": "INT",
+            "integer": "INT",
+            "float": "DOUBLE",
+            "double": "DOUBLE",
+            "bool": "TINYINT(1)",
+            "boolean": "TINYINT(1)",
+            "date": "DATE",
+            "datetime": "DATETIME",
+            "timestamp": "TIMESTAMP",
+            "json": "JSON",
+        }
+    else:
+        raise ValueError(f"Unsupported dialect: {dialect}")
+    return mapping.get(t, mapping["str"])
 
 async def _endpoint_call(call: Literal["GET", "POST"], endpoint: str, **kwargs):
     api_key = os.getenv("ENDPOINT_API_KEY")
@@ -194,15 +257,32 @@ def compare_df(gt:str, predicted:str, row_invariant=False) -> int:
     )
 
 
+def compare_df2(gt, predicted, use_df=True) -> bool:
+    # compare the exeuction match on set
+    if use_df:
+        gt = convert_df_to_set(gt, row_invariant=False)
+        predicted = convert_df_to_set(predicted, row_invariant=False)
+    return gt == predicted
+
+
 async def async_execute_sql(
     sql_query: str, db_path: str = None, endpoint_id: str = None
 ) -> str:
     """DB id could be a path or a Endpoint connection string"""
     if endpoint_id:
-
         return await execute_sql_on_endpoint(sql_query, endpoint_id)
 
     elif db_path:
+        try:
+            async with aiosqlite.connect(db_path) as db:
+                async with db.execute(sql_query) as cursor:
+                    columns = [description[0] for description in cursor.description]
+                    rows = await asyncio.wait_for(cursor.fetchall(), timeout=10)
+                    df = pd.DataFrame(rows, columns=columns)
+                    return df.to_json()
+        except Exception as e:
+            pass
+
         try:
             async with aiosqlite.connect(db_path) as db:
                 async with db.execute(sql_query.replace('"', "'")) as cursor:
@@ -212,7 +292,7 @@ async def async_execute_sql(
                     return df.to_json()
         except Exception as e:
             return f"Error: {str(e)}"
-
+        
 
 def safe_read_df(raw):
     raw = str(raw).strip()
@@ -245,24 +325,92 @@ def safe_read_df(raw):
     
     return df
 
-def evaluate_execution_accuracy(test):
+
+def read_tuple(raw):
+    raw = str(raw).strip()
+    try:
+        data = json.loads(raw)
+        return set(data)
+    except:
+        return None
+
+
+def evaluate_execution_accuracy(test, use_df=True):
     total = 0
     total_non_empty = 0
-    for question in test:
+    total_gt_non_empty = 0
+    correct = 0
+    correct_non_empty = 0
+    count_gt_read_failure = 0       # gt none
+    count_response_read_failure = 0 # response none
+
+    for ind, question in enumerate(test, 1):
+        print("####")
+
+        gt_df = safe_read_df(question.gt_output_df) if use_df else read_tuple(question.gt_output_df)
+        response_df = safe_read_df(question.system_output_df) if use_df else read_tuple(question.system_output_df)
+        if gt_df is None:
+            count_gt_read_failure += 1
+        print("####")
+        print(f"gt:{ind}")
+        print(question.question)
+        print(question.query)
+        print(question.gt_output_df)
+        print(gt_df)
+        if response_df is None:
+            count_response_read_failure += 1
+        print("####")
+        print(f"response:{ind}")
+        print(question.question)
+        print(question.generated_query)
+        print(question.system_output_df)
+        print(response_df)
         
-        gt_df = safe_read_df(question.gt_output_df)
-        if gt_df is None: 
-            continue
-        res = compare_df(question.system_output_df, question.gt_output_df)
-        if "Error:" not in question.system_output_df and res >=0:
-            total += res
-            total_non_empty+=1
-            print(f"POSITIVE\ngt:{question.gt_output_df[:100]}\nsys:{question.system_output_df[:100]}")
+        total += 1
+        if gt_df is None:
+            # declare it is correct or exclude from evaluatoin
+            print("####")
+            print(f"gt is None, correct:{correct}")
+            correct += 1
+        elif response_df is None:
+            # gt is not None and response is None then wrong
+            print("####")
+            print(f"response is None, correct:{correct}")
+            total_gt_non_empty += 1
         else:
-            print(f"NEGATIVE\ngt:{question.gt_output_df[:100]}\nsys:{question.system_output_df[:100]}")
-    execution_accuracy = total / total_non_empty
-    print(f"Test size: {len(test.states)}\nTotal Valid (Non Empty GT): {total_non_empty}\nExecution Accuracy: {execution_accuracy}")
-    return execution_accuracy
+            total_non_empty += 1
+            total_gt_non_empty += 1
+            res = compare_df2(gt_df, response_df, use_df)
+            if res:
+                correct += 1
+                correct_non_empty += 1    
+            print("####")
+            print(f"res match:{res}, correct:{correct}")
+
+    exec_accu = correct / total     # include gt None case
+    if total_non_empty == 0:
+        exec_accu_non_empty = 0
+    else:
+        exec_accu_non_empty = correct_non_empty / total_non_empty       # exclude gt None case
+    
+    out =f"""
+### DataSet Evaluation
+
+| Metric                        | Value |
+|-------------------------------|-------|
+| execution_match               | {exec_accu} |
+| execution_match_non_empty     | {exec_accu_non_empty} |
+| total                         | {total} |
+| total_non_empty               | {total_non_empty} |
+| total_gt_non_empty            | {total_gt_non_empty} |
+| correct                       | {correct} |
+| correct_non_empty             | {correct_non_empty} |
+| count_gt_read_failure         | {count_gt_read_failure} |
+| count_response_read_failure   | {count_response_read_failure} |
+"""
+    
+    print(out)
+    return exec_accu , out
 
 
 def load_benchmark(benchmark_id: str = None, path=None):

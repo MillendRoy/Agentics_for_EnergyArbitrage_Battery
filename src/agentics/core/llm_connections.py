@@ -83,7 +83,7 @@ watsonx_llm = (
         base_url=os.getenv("WATSONX_URL"),
         project_id=os.getenv("WATSONX_PROJECTID"),
         api_key=os.getenv("WATSONX_APIKEY"),
-        temperature=0.3,
+        temperature=0,
         max_input_tokens=100000,
     )
     if os.getenv("WATSONX_APIKEY")
