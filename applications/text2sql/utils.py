@@ -335,27 +335,7 @@ def read_tuple(raw):
         return None
 
 
-def evaluate_execution_accuracy(test):
-    total = 0
-    total_non_empty = 0
-    for question in test:
-        
-        gt_df = safe_read_df(question.gt_output_df)
-        if gt_df is None: 
-            continue
-        res = compare_df(question.system_output_df, question.gt_output_df)
-        if "Error:" not in question.system_output_df and res >=0:
-            total += res
-            total_non_empty+=1
-            print(f"POSITIVE\ngt:{question.gt_output_df[:100]}\nsys:{question.system_output_df[:100]}")
-        else:
-            print(f"NEGATIVE\ngt:{question.gt_output_df[:100]}\nsys:{question.system_output_df[:100]}")
-    execution_accuracy = total / total_non_empty
-    print(f"Test size: {len(test.states)}\nTotal Valid (Non Empty GT): {total_non_empty}\nExecution Accuracy: {execution_accuracy}")
-    return execution_accuracy
-
-
-def evaluate_execution_accuracy2(test, use_df=True):
+def evaluate_execution_accuracy(test, use_df=True):
     total = 0
     total_non_empty = 0
     total_gt_non_empty = 0

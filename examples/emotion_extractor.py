@@ -22,7 +22,7 @@ class Emotion(BaseModel):
     )
 
 
-class EmotionDector(BaseModel):
+class EmotionDetector(BaseModel):
     emotions_in_text: Optional[list[Emotion]] = []
     full_text: Optional[str] = Field(
         None, description="The original passage of text copied verbatim from the SOURCE"
@@ -36,7 +36,7 @@ def split_into_chunks(text, chunk_size=200):
 async def main():
 
     emotion_detector = AG(
-        atype=EmotionDector, llm=AG.get_llm_provider()
+        atype=EmotionDetector, llm=AG.get_llm_provider()
     )
 
     current_file = Path(__file__).resolve()

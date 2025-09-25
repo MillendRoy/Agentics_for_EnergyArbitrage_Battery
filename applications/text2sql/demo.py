@@ -4,7 +4,7 @@ import os
 
 import streamlit as st
 from text2sql import Text2sqlQuestion, execute_questions, load_db, enrich_all_dbs
-from utils import evaluate_execution_accuracy2, get_schema_from_file, load_benchmark
+from utils import evaluate_execution_accuracy, get_schema_from_file, load_benchmark
 from db import DB
 from agentics import AG
 
@@ -85,7 +85,7 @@ with tab1:
                 enrichments=use_enrichments,
                 multiple_runs=number_of_experiments,
                 save_run_path=save_experiment_path))
-            ex, text = evaluate_execution_accuracy2(st.session_state.benchmark_questions)
+            ex, text = evaluate_execution_accuracy(st.session_state.benchmark_questions)
             st.markdown(f"Average Execution Accuracy {execution_accuracy}")
             #if save_experiment_path: st.session_state.benchmark_questions.to_jsonl(save_experiment_path)
         
