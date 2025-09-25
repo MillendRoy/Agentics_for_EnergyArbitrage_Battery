@@ -101,25 +101,24 @@ def evaluate_mappings(gt_mappings: set, system_mappings: set):
 
 
 import asyncio
-            
-mimic = read_task("/Users/gliozzo/Code/agentics911/agentics/data/schema_matching/mimic_attributes.jsonl")
-omop = read_task("/Users/gliozzo/Code/agentics911/agentics/data/schema_matching/omop_attributes.jsonl")
-gt = read_gt("/Users/gliozzo/Code/agentics911/agentics/data/schema_matching/ground_truth_schema_matching.jsonl")
+async def main(source_task, target_task, gt):         
+    mimic = read_task(source_task)
+    omop = read_task(target_task)
+    gt = read_gt(gt)
 
-#task_output = asyncio.run(execute_schema_mappings(mimic, omop))
 
-task_output=json.load(open("/tmp/mappings.json"))
-gt_mappings=set()
-system_mappings=set()
-for mapping in gt:
-    gt_key = f'{mapping["mimic"]["table_id"]}:{mapping["mimic"]["column_name"]}:{mapping["omop"]["table_id"]}:{mapping["omop"]["column_name"]}'
-    gt_mappings.add(gt_key.lower())
-for mapping in task_output:
-    if mapping["confidence"]>0.9:
-        sys_key=f'{mapping["source_table"]}:{mapping["source_attribute"]}:{mapping["target_table"]}:{mapping["target_attribute"]}'
-        system_mappings.add(sys_key.lower())
+    task_output=json.load(open("/tmp/mappings.json"))
+    gt_mappings=set()
+    system_mappings=set()
+    for mapping in gt:
+        gt_key = f'{mapping["mimic"]["table_id"]}:{mapping["mimic"]["column_name"]}:{mapping["omop"]["table_id"]}:{mapping["omop"]["column_name"]}'
+        gt_mappings.add(gt_key.lower())
+    for mapping in task_output:
+        if mapping["confidence"]>0.9:
+            sys_key=f'{mapping["source_table"]}:{mapping["source_attribute"]}:{mapping["target_table"]}:{mapping["target_attribute"]}'
+            system_mappings.add(sys_key.lower())
 
-print(evaluate_mappings(gt_mappings,system_mappings))
+    print(evaluate_mappings(gt_mappings,system_mappings))
 
 
 #tasks_output = asyncio.run(execute_schema_mappings(mimic, omop))

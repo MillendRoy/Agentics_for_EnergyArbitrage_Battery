@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 import random
 sys.path.append(str(Path(__file__).resolve().parent))
-from utils import get_schema_from_sqllite, get_schema_from_file, async_execute_sql, evaluate_execution_accuracy2
+from utils import get_schema_from_sqllite, get_schema_from_file, async_execute_sql, evaluate_execution_accuracy
 from crewai.tools import tool
 from agentics import AG
 from db import DB
@@ -227,7 +227,7 @@ async def execute_questions(test:AG,
         print(f"task executed in {time.time() - begin_time} seconds")
         test.states=test.states[len(training.states):]
        
-        accuracy, full_eval = evaluate_execution_accuracy2(test)
+        accuracy, full_eval = evaluate_execution_accuracy(test)
         total_accuracy +=accuracy
         if save_run_path:
             experiment_evaluation_output=os.path.join(save_run_path, f"exp_{run}_eval.txt")
