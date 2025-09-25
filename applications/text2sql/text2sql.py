@@ -280,7 +280,7 @@ async def run_evaluation_benchmark(benchmark_id = "archer_en_dev",
         test.states=new_states
 
         test = await execute_questions(test, few_shots_path=few_shots_path)
-        print(evaluate_execution_accuracy2(test))
+        print(evaluate_execution_accuracy(test))
         return test
         
 
