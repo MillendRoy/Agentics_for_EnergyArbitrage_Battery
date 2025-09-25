@@ -52,7 +52,7 @@ async def main():
     emotion_detector.verbose_transduction = True
     emotions = await (emotion_detector << split_into_chunks(text)[:100])
 
-    emotions.pretty_print()
+    print(emotions.pretty_print())
 
 
 asyncio.run(main())
