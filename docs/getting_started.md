@@ -78,6 +78,10 @@ test hello world example (need to set up llm credentials first)
 
 ```bash
 python python examples/hello_world.py
+python examples/self_transduction.py
+python examples/agentics_web_search_report.py
+
+
 ```
 
 this will return something like 

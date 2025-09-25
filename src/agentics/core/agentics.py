@@ -38,7 +38,7 @@ from agentics.core.mapping import AttributeMapping, ATypeMapping
 from agentics.core.utils import (
     clean_for_json,
     get_active_fields,
-    is_list_of_str,
+    is_str_or_list_of_str,
     make_all_fields_optional,
     pydantic_model_from_csv,
     pydantic_model_from_dataframe,
@@ -483,12 +483,20 @@ class AG(BaseModel, Generic[T]):
                         )
                     )
 
-        elif is_list_of_str(other):
+        elif is_str_or_list_of_str(other):
             if isinstance(other, str):
                 other = [other]
             input_prompts = ["\nSOURCE:\n" + x for x in other]
+        elif isinstance(other,list):
+            try:
+                input_prompts = ["\nSOURCE:\n" + str(x) for x in other]
+            except:
+                return ValueError
         else:
-            return NotImplemented
+            try:
+                input_prompts = ["\nSOURCE:\n" + str(other)]
+            except:
+                return ValueError
 
         # expand prompts with relevant knowledge from memory
         if self.memory_collection:
@@ -564,7 +572,7 @@ class AG(BaseModel, Generic[T]):
             transduced_results = await pt.execute(
                 *input_prompts,
                 description=f"Transducing  {self.atype.__name__} << {
-                    str(other[0])+' ...' if is_list_of_str(other) else other.atype.__name__}",
+                    "DefaultType" if is_str_or_list_of_str(other) else other.atype.__name__}",
             )
         except Exception as e:
             transduced_results = self.states
@@ -603,7 +611,7 @@ class AG(BaseModel, Generic[T]):
                     **(self[i].model_dump() | other[i].model_dump() | output_state_dict)
                 )
                 output.states.append(merged)
-        elif is_list_of_str(other):
+        elif is_str_or_list_of_str(other):
             for i in range(len(other)):
                 if isinstance(output_states[i], self.atype):
                     output.states.append(self.atype(**output_states[i].model_dump()))
