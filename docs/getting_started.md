@@ -150,9 +150,6 @@ async def main():
 
     answers = await (AG(atype=Answer, 
                         llm= watsonx_crewai_llm,
-                        instructions="""Provide an Answer for the following input text 
-                        only if it contains an appropriate question that do not contain
-                        violent or adult language """
                         ) << input_questions)
 
     print(answers.pretty_print())
