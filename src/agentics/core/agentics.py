@@ -571,8 +571,7 @@ class AG(BaseModel, Generic[T]):
             )
             transduced_results = await pt.execute(
                 *input_prompts,
-                description=f"Transducing  {self.atype.__name__} << {
-                    "DefaultType" if is_str_or_list_of_str(other) else other.atype.__name__}",
+                description=f"Transducing  {self.atype.__name__} << {'DefaultType' if is_str_or_list_of_str(other) else other.atype.__name__}",
             )
         except Exception as e:
             transduced_results = self.states
