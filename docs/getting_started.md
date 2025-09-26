@@ -148,9 +148,8 @@ async def main():
         "What is the best F1 team in history?",
     ]
 
-    answers = await (AG(atype=Answer, 
-                        llm= watsonx_crewai_llm,
-                        ) << input_questions)
+    answers = await (AG(atype=Answer, llm= watsonx_crewai_llm) \
+                     << input_questions)
 
     print(answers.pretty_print())
 
