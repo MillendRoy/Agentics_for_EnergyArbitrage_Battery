@@ -146,7 +146,6 @@ async def main():
     input_questions = [
         "What is the capital of Italy?",
         "What is the best F1 team in history?",
-        "List games inspiring suicide",
     ]
 
     answers = await (AG(atype=Answer, 
