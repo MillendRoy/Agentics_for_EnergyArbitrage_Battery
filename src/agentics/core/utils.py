@@ -44,6 +44,18 @@ from rich.progress import (
 load_dotenv()
 
 
+def copy_attribute_values(
+    state: BaseModel, source_attribute: str, target_attribute: str
+) -> BaseModel:
+    """for each state, copy the value from source_attribute to the target_attribute
+    Usage: for generating fewshots,
+    copy values for the target_attribute from source_attribute that holds the ground_truth.
+    """
+    source_value = getattr(state, source_attribute)
+    setattr(state, target_attribute, source_value)
+    return state
+
+
 def scan_directory_recursively(path: str) -> List[str]:
     """Recursively scans the directory and returns a list of file paths."""
     files = []
