@@ -32,21 +32,16 @@ from agentics.core.async_executor import (
     PydanticTransducerVLLM,
     aMap,
 )
+
 from agentics.core.errors import InvalidStateError
 from agentics.core.llm_connections import available_llms, get_llm_provider
 from agentics.core.mapping import AttributeMapping, ATypeMapping
+from agentics.core.atype import copy_attribute_values, get_active_fields, pydantic_model_from_csv, pydantic_model_from_dataframe, pydantic_model_from_dict, pydantic_model_from_jsonl, make_all_fields_optional
 from agentics.core.utils import (
     clean_for_json,
-    get_active_fields,
     is_str_or_list_of_str,
-    make_all_fields_optional,
-    pydantic_model_from_csv,
-    pydantic_model_from_dataframe,
-    pydantic_model_from_dict,
-    pydantic_model_from_jsonl,
     remap_dict_keys,
     sanitize_dict_keys,
-    copy_attribute_values,
 )
 
 AG = TypeVar("AG", bound="AG")
@@ -485,9 +480,7 @@ class AG(BaseModel, Generic[T]):
         output = self.clone()
         output.states = []
 
-        input_prompts = (
-            []
-        )  # gather input prompts for transduction by dumping input states
+        input_prompts = []  # gather input prompts for transduction by dumping input states
         target_type = (
             self.subset_atype(self.transduce_fields)
             if self.transduce_fields
@@ -624,7 +617,7 @@ class AG(BaseModel, Generic[T]):
                     output_state_dict = output_state.model_dump()
 
                 merged = self.atype(
-                    **(self[i].model_dump() if len(self)>i else {} | other[i].model_dump() | output_state_dict)
+                    **((self[i].model_dump() if len(self)>i else {} )| other[i].model_dump() | output_state_dict )
                 )
                 output.states.append(merged)
         #elif is_str_or_list_of_str(other):
