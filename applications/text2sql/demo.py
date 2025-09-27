@@ -90,7 +90,6 @@ with tab1:
             #if save_experiment_path: st.session_state.benchmark_questions.to_jsonl(save_experiment_path)
         
 with tab2:
-    st.multiselect("")
     with st.form("Select Question"):
         
         select_question=st.selectbox("Choose a question",
@@ -109,27 +108,11 @@ with tab2:
         st.session_state.test = AG(atype=Text2sqlQuestion, states=[select_question])
 
 
-
-
-    # if execute_user_question:
-    #     question = Text2sqlQuestion(
-    #         question=user_question,
-    #         db_id=db,
-    #         benchmark_id=benchmark_id,
-    #         endpoint_id=str(
-    #             st.session_state.benchmark_metadata["datasource_url"].split("/")[-1]
-    #         ),
-    #     )
-    #     test = AG(atype=Text2sqlQuestion, states=[question])
-
     if  execute_user_question:
         question = Text2sqlQuestion(
             question=user_question,
             db_id=db,
             benchmark_id=st.session_state.benchmark_id,
-            # endpoint_id=str(
-            #     st.session_state.benchmark_metadata["datasource_url"].split("/")[-1]
-            # ),
         )
         st.session_state.test = AG(atype=Text2sqlQuestion, states=[question])
 
@@ -156,30 +139,29 @@ with tab2:
 
 with tab3:
     with st.form("DB"):
-        db_id= st.selectbox("Choose Target DB", options=list(get_schema_from_file(st.session_state.benchmark_id).keys()))
         enrich_all_db = st.form_submit_button("Enrich all DBs")
-        db_path=st.text_input("Chose Output DB folder")
+        db_id= st.selectbox("Choose Target DB", options=list(get_schema_from_file(st.session_state.benchmark_id).keys()))
+        #db_path=st.text_input("Chose Output DB folder")
         show_selected_db = st.form_submit_button("Show Selected DB")
+        show_enriched_db = st.form_submit_button("Show Enriched DB")
 
         #enrich_current_db = st.form_submit_button("Enrich current DBs")
 
 
     
     if show_selected_db:
-        db = DB(benchmark_id=benchmark_id, db_id=db_id)
-        db = asyncio.run(db.load_enrichments())
-        st.write(db)
+        db = DB(benchmark_id=st.session_state.benchmark_id, db_id=db_id)
+        st.write(asyncio.run(db.load_db()))
+    if show_enriched_db:
+        db = DB(benchmark_id=st.session_state.benchmark_id, db_id=db_id)
+        st.write(asyncio.run(db.load_enrichments()))
+
 
 
 
     if enrich_all_db:
-        
-        # if "datasource_url" in st.session_state.benchmark_metadata:
-        #     endpoint_id=str(st.session_state.benchmark_metadata["datasource_url"].split("/")[-1])
-        # else: endpoint_id=None
-        # db=DB(db_id=db_id,benchmark_id=benchmark_id)
-        # output =db.load_enrichments()
-        asyncio.run(enrich_all_dbs(st.session_state.benchmark_questions))
+        with st.spinner("Wait Benchmark Execution In Progress"):
+            output = asyncio.run(enrich_all_dbs(st.session_state.benchmark_questions))
         # if output[1]:
         #     db = output[0]
         # else:
