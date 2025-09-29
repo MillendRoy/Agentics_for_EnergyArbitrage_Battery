@@ -84,7 +84,7 @@ orders = AG.from_csv("data/orders.csv", atype = Order)
 print(orders.atype)
 
 #note that states contains only the attribites in atype, others have been filtered out
-print(orders.pretty_print())
+orders.pretty_print()
 AG.to_csv("data/orders_filtered.jsonl")
 ```
 
