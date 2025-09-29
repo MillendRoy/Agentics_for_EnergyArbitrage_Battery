@@ -35,9 +35,7 @@ def split_into_chunks(text, chunk_size=200):
 
 async def main():
 
-    emotion_detector = AG(
-        atype=EmotionDetector, llm=AG.get_llm_provider()
-    )
+    emotion_detector = AG(atype=EmotionDetector, llm=AG.get_llm_provider())
 
     current_file = Path(__file__).resolve()
     text = None
@@ -52,7 +50,7 @@ async def main():
     emotion_detector.verbose_transduction = True
     emotions = await (emotion_detector << split_into_chunks(text)[:100])
 
-    print(emotions.pretty_print())
+    emotions.pretty_print()
 
 
 asyncio.run(main())

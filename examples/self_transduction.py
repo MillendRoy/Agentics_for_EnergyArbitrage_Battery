@@ -32,7 +32,7 @@ async def main():
         instructions="Generate a tweet to advertise the release of the input movie",
     )
 
-    print(categorized_movies.pretty_print())
+    categorized_movies.pretty_print()
 
 
 asyncio.run(main())

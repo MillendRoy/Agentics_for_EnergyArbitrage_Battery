@@ -35,7 +35,7 @@ async def main():
 
     answers = await (AG(atype=Answer) << input_questions)
 
-    print(answers.pretty_print())
+    answers.pretty_print()
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ import time
 from collections.abc import Iterable
 from copy import copy, deepcopy
 from functools import partial, reduce
+from itertools import zip_longest
 from typing import (
     Any,
     Callable,
@@ -25,32 +26,25 @@ from crewai import LLM
 from langchain_core.prompts import PromptTemplate
 from loguru import logger
 from pandas import DataFrame
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field, create_model, ValidationError
 
 from agentics.core.async_executor import (
     PydanticTransducerCrewAI,
     PydanticTransducerVLLM,
     aMap,
 )
+
 from agentics.core.errors import InvalidStateError
 from agentics.core.llm_connections import available_llms, get_llm_provider
 from agentics.core.mapping import AttributeMapping, ATypeMapping
+from agentics.core.atype import copy_attribute_values, get_active_fields, pydantic_model_from_csv, pydantic_model_from_dataframe, pydantic_model_from_dict, pydantic_model_from_jsonl, make_all_fields_optional
 from agentics.core.utils import (
     clean_for_json,
-    get_active_fields,
     is_str_or_list_of_str,
-    make_all_fields_optional,
-    pydantic_model_from_csv,
-    pydantic_model_from_dataframe,
-    pydantic_model_from_dict,
-    pydantic_model_from_jsonl,
     remap_dict_keys,
     sanitize_dict_keys,
 )
 
-# from agentics.core.globals import Memory
-
-# Type variables
 AG = TypeVar("AG", bound="AG")
 T = TypeVar("T", bound="BaseModel")
 StateReducer = Callable[[List[BaseModel]], BaseModel | List[BaseModel]]
@@ -70,7 +64,7 @@ class AG(BaseModel, Generic[T]):
     """
 
     atype: Type[BaseModel] = Field(
-        BaseModel,
+        None,
         description="""this is the type in common among all element of the list""",
     )
     crew_prompt_params: Optional[Dict[str, str]] = Field(
@@ -91,7 +85,6 @@ class AG(BaseModel, Generic[T]):
         3,
         description="Max number of iterations for the agent to provide a final transduction when using tools.",
     )
-    memory_collection: Optional[str] = None
     prompt_template: Optional[str] = Field(
         None,
         description="Langchain style prompt pattern to be used when provided as an input for a transduction.  Refer to https://python.langchain.com/docs/concepts/prompt_templates/ ",
@@ -118,6 +111,49 @@ class AG(BaseModel, Generic[T]):
     class Config:
         model_config = {"arbitrary_types_allowed": True}
 
+    @property
+    def fields(self) -> List[str]:
+        """Returns the list of atype model fields"""
+        return list(self.atype.model_fields)
+
+    @property
+    def timeout(self):
+        return self.transduction_timeout
+
+    @timeout.setter
+    def timeout(self, value: float):
+        self.transduction_timeout = value
+
+
+    ###################################
+    #### Agentics Utilities   #########
+    ###################################
+    def clone(agentics_instance):
+        copy_instance = copy(agentics_instance)
+        copy_instance.states = deepcopy(agentics_instance.states)
+        copy_instance.tools = agentics_instance.tools  # shallow copy, ok if immutable
+        return copy_instance
+
+    def filter_states(self, start: int=None, end: int=None) -> AG:
+        self.states = self.states[start:end]
+        return self
+    
+    def get_random_sample(self, percent: float) -> AG:
+        if not (0 <= percent <= 1):
+            raise ValueError("Percent must be between 0 and 1")
+
+        sample_size = int(len(self.states) * percent)
+        output = self.clone()
+        output.states = random.sample(self.states, sample_size)
+        return output
+
+    
+
+
+    ##############
+    ### LLMs  ####
+    ##############
+
     @staticmethod
     def create_crewai_llm(**kwargs):
         return LLM(**kwargs)
@@ -137,6 +173,10 @@ class AG(BaseModel, Generic[T]):
         if provider_name in available_llms:
             return available_llms[provider_name]
         raise ValueError(f"Unknown provider: {provider_name}")
+    
+    ##############################
+    #### List Functionalities ####
+    ##############################
 
     def __iter__(self):
         """Iterates over the list of states"""
@@ -146,42 +186,20 @@ class AG(BaseModel, Generic[T]):
         """Returns the number of states"""
         return len(self.states)
 
-    def __call__(self, *fields, persist: Optional[Union[bool, List[str]]] = None) -> AG:
-        """
-        Returns a new agentic with the subtype of fields from self.
-
-        Args:
-            *fields (str): The fields used to create a new AG,
-                these fields are used for transductions.
-            persist (bool or list[str], optional): The created AG persists additional fields
-                from self, but those additional fields are not updated by the transduction.
-                - If persist is None, the AG atype only contains the fields
-                - If persist is True, the AG type remains the same and all the fields from
-                    self are persisted. Only the *fields are updated (similar to self-transduction)
-                - If persist is a list of strings, a new AG is created that includes the *fields as
-                    well as the persistent fields given. Only the *fields are updated
-        """
-        if persist and isinstance(persist, bool):
-            new_ag = self.clone()
-            new_ag.transduce_fields = list(fields)
-            return new_ag
-        elif isinstance(persist, Iterable) and all(isinstance(i, str) for i in persist):
-            all_fields = fields + tuple(persist)
-        else:
-            all_fields = fields
-        atype = self.subset_atype(all_fields)
-        new_ag = self.rebind_atype(atype, {f: f for f in all_fields})
-        new_ag.transduce_fields = list(fields)
-        return new_ag
 
     def __getitem__(self, index: int):
         """Returns the state for the provided index"""
         return self.states[index]
+    
+    def append(self, state: BaseModel):
+        """Append the state into the list of states"""
+        self.states.append(state)
 
-    def filter(self, func: StateFlag) -> AG:
-        """func should be a function that takes as an input a state and return a boolean, false will be filtered out"""
-        self.states = [state for state in self.states if func(state)]
-        return self
+
+
+    ########################################
+    #### aMapReduce Functionalities ########
+    ########################################
 
     async def amap(self, func: StateOperator, timeout=None) -> AG:
         """Asynchronous map with exception-safe job gathering"""
@@ -215,11 +233,36 @@ class AG(BaseModel, Generic[T]):
 
         self.states = _states
         return self
+    
+    async def apply(self, func: StateOperator, first_n: Optional[int] = None) -> AG:
+        """
+        Applies a function to each state in the Agentics object.
+
+        Parameters:
+        - func: A function that takes a Pydantic model (a state) and returns a modified Pydantic model.
+
+        Returns:
+        - A new Agentics object with the transformed states.
+        """
+        if first_n is None:
+            self.states = [func(state) for state in self.states]
+        else:
+            self.states = [
+                func(state) for state in self.states[:first_n]
+            ] + self.states[first_n:]
+        return self
+
+    
 
     async def areduce(self, func: StateReducer) -> AG:
         output = await func(self.states)
         self.states = [output] if isinstance(output, BaseModel) else output
         return self
+
+
+    ###############################
+    #### Import Functionalities ###
+    ###############################
 
     @classmethod
     def from_states(cls, states: List[BaseModel], atype: BaseModel = None) -> AG:
@@ -338,124 +381,81 @@ class AG(BaseModel, Generic[T]):
                 c_row += 1
             return cls(states=states, atype=new_type)
 
-    def subset_atype(self, include_fields: set[str]) -> Type[BaseModel]:
-        """Generate a type which is a subset of a_type containing only fields in include list"""
-        fields = {
-            field: (
-                self.atype.model_fields[field].annotation,
-                self.atype.model_fields[field].default,
-            )
-            for field in include_fields
-        }
-        return create_model("_".join(include_fields), **fields)
+    ###############################
+    #### Export Functionalities ###
+    ###############################
 
-    def rebind_atype(
-        self, new_atype: BaseModel, mapping: Dict[str, str] = None
-    ) -> BaseModel:
-        """Return an agentic of type atype where all the states have been converted to atype, keeping only the matching attributes, discariding the remaining."""
-        new_ag = deepcopy(self)
-        new_ag.atype = new_atype
-        new_ag.states = []
-
+    def pretty_print(self):
+        output = f"Atype : {self.atype}\n"
         for state in self.states:
-            if mapping:
-                new_state = remap_dict_keys(state.model_dump(), mapping)
-                new_ag.states.append(new_atype(**new_state))
+            output += yaml.dump(state.model_dump() if isinstance(state,BaseModel) else str(state), 
+                                sort_keys=False) + "\n"
+        print(output)
+        return output
 
-            else:
-                new_ag.states.append(new_atype(**state.model_dump()))
-        return new_ag
 
-    def add_attribute(
-        self,
-        slot_name: str,
-        slot_type: type = str,
-        default_value=None,
-        description: Optional[str] = None,
-    ):
+    def to_csv(self, csv_file: str) -> Any:
+        if self.verbose_transduction:
+            logger.debug(f"Exporting {len(self.states)} Agentics to CSV {csv_file}")
+        field_names = self.atype.model_fields.keys()
+        with open(csv_file, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=field_names)
+            writer.writeheader()
+            for state in self.states:
+                writer.writerow(state.model_dump())
+
+    def to_jsonl(self, jsonl_file: str) -> Any:
+        if self.verbose_transduction:
+            logger.debug(
+                f"Exporting {len(self.states)} states or atype {self.atype} to {jsonl_file}"
+            )
+        with open(jsonl_file, mode="w", newline="", encoding="utf-8") as f:
+            for state in self.states:
+                try:
+                    f.write(json.dumps(clean_for_json(state)) + "\n")
+                except Exception as e:
+                    logger.debug(f"⚠️ Failed to serialize state: {e}")
+                    f.write(json.dumps(self.atype().model_dump()))
+
+    def to_dataframe(self) -> DataFrame:
         """
-        Add a new slot to the `atype` and rebase the Agentics model.
-
-        Args:
-            slot_name (str): Name of the new slot to add.
-            slot_type (type): Data type of the slot (default: str).
-            default_value: Default value for the slot (default: None).
-            description (str, optional): Description for the slot.
+        Converts the current Agentics states into a pandas DataFrame.
 
         Returns:
-            Type[BaseModel]: A new Pydantic model with the added slot.
+            DataFrame: A pandas DataFrame representing the current states.
         """
-        # Clone existing fields
-        fields = {
-            field: (
-                self.atype.model_fields[field].annotation,
-                Field(
-                    default=self.atype.model_fields[field].default,
-                    description=self.atype.model_fields[field].description,
-                ),
-            )
-            for field in self.atype.model_fields.keys()
-        }
+        data = [state.model_dump() for state in self.states]
+        return pd.DataFrame(data)
 
-        # Add the new field
-        fields[slot_name] = (
-            slot_type,
-            Field(default=default_value, description=description),
-        )
 
-        # Create a new model with the added field
-        new_model = create_model(f"{self.atype.__name__}_extended", **fields)
 
-        # Optionally re-assign it to self.atype
-        return self.rebind_atype(new_model)
-
-    def clone(agentics_instance):
-        copy_instance = copy(agentics_instance)
-        copy_instance.states = deepcopy(agentics_instance.states)
-        copy_instance.tools = agentics_instance.tools  # shallow copy, ok if immutable
-        return copy_instance
-
-    def truncate_states(self, start: int, end: int) -> AG:
-        self.states = self.states[start:end]
-        return self
-
-    @staticmethod
-    def copy_attribute_values(
-        state: BaseModel, source_attribute: str, target_attribute: str
-    ) -> BaseModel:
-        """for each state, copy the value from source_attribute to the target_attribute
-        Usage: for generating fewshots,
-        copy values for the target_attribute from source_attribute that holds the ground_truth.
-        """
-        source_value = getattr(state, source_attribute)
-        setattr(state, target_attribute, source_value)
-        return state
-
-    async def copy_fewshots_from_ground_truth(
-        self, source_target_pairs: List[Tuple[str, str]], first_n: Optional[int] = None
-    ) -> AG:
-        """for each state, copy fields values from ground truth to target attributes
-        to be used as fewshot during transduction
-        """
-        for src, target in source_target_pairs:
-            func = partial(
-                AG.copy_attribute_values,
-                source_attribute=src,
-                target_attribute=target,
-            )
-            await self.apply(func, first_n=first_n)
-        return self
+    ##########################################
+    ##### Logical Transduction ###############
+    ##########################################
 
     async def __lshift__(self, other):
         """This is a transduction operation projecting a list of pydantic objects of into a target types
         Results are accumulated in the self instance and returned back as a result.
         Return None if the right operand is not of type AgenticList
         """
+        from agentics.core.atype import AGString
+        async def llm_call(input: AGString) -> AGString:
+            input.string= self.llm.call(input.string)
+            return input
+        
+        if not self.atype and isinstance(other,str):
+            return self.llm.call(other)
+        
+        
+        if not self.atype and is_str_or_list_of_str(other):
+            input_messages=AG(states=[AGString(string=x) for x in other])
+            input_messages = await input_messages.amap(llm_call)
+            return [x.string for x in input_messages.states]
+        
         output = self.clone()
         output.states = []
-        input_prompts = (
-            []
-        )  # gather input prompts for transduction by dumping input states
+
+        input_prompts = []  # gather input prompts for transduction by dumping input states
         target_type = (
             self.subset_atype(self.transduce_fields)
             if self.transduce_fields
@@ -497,22 +497,6 @@ class AG(BaseModel, Generic[T]):
                 input_prompts = ["\nSOURCE:\n" + str(other)]
             except:
                 return ValueError
-
-        # expand prompts with relevant knowledge from memory
-        if self.memory_collection:
-            collections = await memory.get_collections()
-            if self.memory_collection in collections:
-                final_prompts = []
-                for prompt in input_prompts:
-                    passages = memory.retrieve_content(self.memory_collection, prompt)
-                    newline_split_passages = "\n".join(passages)
-                    final_prompts.append(
-                        f"""Read the following passages provided as context: 
-                                            {newline_split_passages}
-                                            Now transduce output for the following prompt:
-                                            {prompt}"""
-                    )
-                input_prompts = final_prompts
 
         ## collect few shots, only when all target slots are non null TODO need to improve with some non null
         instructions = ""
@@ -571,7 +555,7 @@ class AG(BaseModel, Generic[T]):
             )
             transduced_results = await pt.execute(
                 *input_prompts,
-                description=f"Transducing  {self.atype.__name__} << {'DefaultType' if is_str_or_list_of_str(other) else other.atype.__name__}",
+                description=f"Transducing  {self.atype.__name__} << {"DefaultType" if not isinstance(other, AG) else other.atype.__name__}",
             )
         except Exception as e:
             transduced_results = self.states
@@ -607,38 +591,83 @@ class AG(BaseModel, Generic[T]):
                     output_state_dict = output_state.model_dump()
 
                 merged = self.atype(
-                    **(self[i].model_dump() | other[i].model_dump() | output_state_dict)
+                    **((self[i].model_dump() if len(self)>i else {} )| other[i].model_dump() | output_state_dict )
                 )
                 output.states.append(merged)
-        elif is_str_or_list_of_str(other):
+        #elif is_str_or_list_of_str(other):
+        elif isinstance(other, list):
             for i in range(len(other)):
                 if isinstance(output_states[i], self.atype):
                     output.states.append(self.atype(**output_states[i].model_dump()))
-                elif output_states[i]:
-                    output.states.append(self.atype(**output_states[i][0].model_dump()))
                 else:
                     output.states.append(self.atype())
         else:
-            ValueError(f"<< expected as Agentic or List of str, received {type(other)}")
+            if isinstance(output_states[0], self.atype):
+                output.states.append(self.atype(**output_states[i].model_dump()))
         return output
 
-    async def apply(self, func: StateOperator, first_n: Optional[int] = None) -> AG:
+    async def copy_fewshots_from_ground_truth(
+        self, source_target_pairs: List[Tuple[str, str]], first_n: Optional[int] = None
+    ) -> AG:
+        """for each state, copy fields values from ground truth to target attributes
+        to be used as fewshot during transduction
         """
-        Applies a function to each state in the Agentics object.
-
-        Parameters:
-        - func: A function that takes a Pydantic model (a state) and returns a modified Pydantic model.
-
-        Returns:
-        - A new Agentics object with the transformed states.
-        """
-        if first_n is None:
-            self.states = [func(state) for state in self.states]
-        else:
-            self.states = [
-                func(state) for state in self.states[:first_n]
-            ] + self.states[first_n:]
+        for src, target in source_target_pairs:
+            func = partial(
+                copy_attribute_values,
+                source_attribute=src,
+                target_attribute=target,
+            )
+            await self.apply(func, first_n=first_n)
         return self
+
+    async def self_transduction(
+        self,
+        source_fields: List[str],
+        target_fields: List[str],
+        instructions: str = None,
+    ):
+        target = self.clone()
+        self.transduce_fields = source_fields
+        target.instructions = instructions or target.instructions
+        target.transduce_fields = target_fields
+
+        output_process = target << self
+        output = await output_process
+        return output
+
+
+    #####################################
+    ### Atype Manipulation Functions ####
+    #####################################
+
+    def __call__(self, *fields, persist: Optional[Union[bool, List[str]]] = None) -> AG:
+        """
+        Returns a new agentic with the subtype of fields from self.
+
+        Args:
+            *fields (str): The fields used to create a new AG,
+                these fields are used for transductions.
+            persist (bool or list[str], optional): The created AG persists additional fields
+                from self, but those additional fields are not updated by the transduction.
+                - If persist is None, the AG atype only contains the fields
+                - If persist is True, the AG type remains the same and all the fields from
+                    self are persisted. Only the *fields are updated (similar to self-transduction)
+                - If persist is a list of strings, a new AG is created that includes the *fields as
+                    well as the persistent fields given. Only the *fields are updated
+        """
+        if persist and isinstance(persist, bool):
+            new_ag = self.clone()
+            new_ag.transduce_fields = list(fields)
+            return new_ag
+        elif isinstance(persist, Iterable) and all(isinstance(i, str) for i in persist):
+            all_fields = fields + tuple(persist)
+        else:
+            all_fields = fields
+        atype = self.subset_atype(all_fields)
+        new_ag = self.rebind_atype(atype, {f: f for f in all_fields})
+        new_ag.transduce_fields = list(fields)
+        return new_ag
 
     def product(self, other: AG) -> AG:
         """
@@ -683,6 +712,46 @@ class AG(BaseModel, Generic[T]):
             extended_ags.append(extended_ag)
 
         return reduce((lambda x, y: AG.add_states(x, y)), extended_ags)
+    
+ 
+    
+
+    def merge(self, other: "AG") -> "AG":
+        """
+        Merge two AGs positionally:
+        - The result atype = union of fields from self.atype and other.atype.
+        - For field name conflicts, RIGHT (other) wins for both schema and values.
+        - States are merged pairwise (zip); if lengths differ, missing side contributes {}.
+
+        Returns:
+            AG with combined atype and merged states.
+        """
+
+        # 1) Build combined atype (prefer RIGHT field definitions on conflicts)
+        new_fields: Dict[str, tuple[Type, Field]] = {}
+
+        # left first...
+        for name, f in self.atype.model_fields.items():
+            new_fields[name] = (f.annotation, Field(default=f.default, description=f.description))
+
+        # ...then overlay right (right wins)
+        for name, f in other.atype.model_fields.items():
+            new_fields[name] = (f.annotation, Field(default=f.default, description=f.description))
+
+        merged_atype = create_model(
+            f"{self.atype.__name__}__merge__{other.atype.__name__}",
+            **new_fields
+        )
+
+        # 2) Pairwise merge states (right wins on value conflicts)
+        merged_states = []
+        for left_state, right_state in zip_longest(self.states, other.states, fillvalue=None):
+            left = left_state.model_dump() if left_state is not None else {}
+            right = right_state.model_dump() if right_state is not None else {}
+            data = left | right  # right overwrites left for same keys
+            merged_states.append(merged_atype(**data))
+
+        return AG(atype=merged_atype, states=merged_states)
 
     def quotient(self, other: AG) -> List[AG]:
         """
@@ -693,9 +762,7 @@ class AG(BaseModel, Generic[T]):
         Usage: After evaluating the prompts we want separate the evaluated sets and reduce score from each
         """
         quotient_list = []
-        quotient_size, quotient_counts = len(self.states), len(other.states) // len(
-            self.states
-        )
+        quotient_size, quotient_counts = len(self.states), len(other.states) // len(self.states)
         for ind in range(quotient_counts):
             quotient_ag = self.clone()
             quotient_ag.states = [
@@ -706,20 +773,7 @@ class AG(BaseModel, Generic[T]):
             ]
             quotient_list.append(quotient_ag)
         return quotient_list
-
-    @staticmethod
-    def add_states(first: AG, other: AG) -> AG:
-        return AG(
-            atype=first.atype, tools=first.tools, states=first.states + other.states
-        )
-
-    def __add__(self, other):
-        if isinstance(other, AG):
-            return AG(
-                atype=self.atype, tools=self.tools, states=self.states + other.states
-            )
-        return NotImplemented
-
+    
     async def map_atypes(self, other: AG) -> ATypeMapping:
         if self.verbose_agent:
             logger.debug(f"Mapping type {other.atype} into type {self.atype}")
@@ -757,83 +811,96 @@ class AG(BaseModel, Generic[T]):
             << [f"SOURCE:\n{str(source_schema_dict)}\nTARGET:{str(target_schema_dict)}"]
         )
         return output.attribute_mappings
-
-    async def self_transduction(
-        self,
-        source_fields: List[str],
-        target_fields: List[str],
-        instructions: str = None,
-    ):
-        target = self.clone()
-        self.transduce_fields = source_fields
-        target.instructions = instructions or target.instructions
-        target.transduce_fields = target_fields
-
-        output_process = target << self
-        output = await output_process
-        return output
-
-    def get_random_sample(self, percent: float) -> AG:
-        if not (0 <= percent <= 1):
-            raise ValueError("Percent must be between 0 and 1")
-
-        sample_size = int(len(self.states) * percent)
-        output = self.clone()
-        output.states = random.sample(self.states, sample_size)
-        return output
-
-    def to_csv(self, csv_file: str) -> Any:
-        if self.verbose_transduction:
-            logger.debug(f"Exporting {len(self.states)} Agentics to CSV {csv_file}")
-        field_names = self.atype.model_fields.keys()
-        with open(csv_file, mode="w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=field_names)
-            writer.writeheader()
-            for state in self.states:
-                writer.writerow(state.model_dump())
-
-    def to_jsonl(self, jsonl_file: str) -> Any:
-        if self.verbose_transduction:
-            logger.debug(
-                f"Exporting {len(self.states)} states or atype {self.atype} to {jsonl_file}"
+    
+    def subset_atype(self, include_fields: set[str]) -> Type[BaseModel]:
+        """Generate a type which is a subset of a_type containing only fields in include list"""
+        fields = {
+            field: (
+                self.atype.model_fields[field].annotation,
+                self.atype.model_fields[field].default,
             )
-        with open(jsonl_file, mode="w", newline="", encoding="utf-8") as f:
-            for state in self.states:
-                try:
-                    f.write(json.dumps(clean_for_json(state)) + "\n")
-                except Exception as e:
-                    logger.debug(f"⚠️ Failed to serialize state: {e}")
-                    f.write(json.dumps(self.atype().model_dump()))
+            for field in include_fields
+        }
+        return create_model("_".join(include_fields), **fields)
 
-    def to_dataframe(self) -> DataFrame:
+    def rebind_atype(
+        self,
+        new_atype: Type[BaseModel],
+        mapping: Dict[str, str] | None = None):
         """
-        Converts the current Agentics states into a pandas DataFrame.
+        Return a new AG whose `atype` is rebound to `new_atype`.
+
+        Each state is converted into an instance of `new_atype`.
+        - If `mapping` is provided, it remaps source field names to target names.
+        - Only matching attributes are kept; extra fields are discarded.
+        - If a state cannot be converted, it is skipped (with a warning).
+
+        Args:
+            new_atype: Target Pydantic model class.
+            mapping: Optional dict mapping {old_key: new_key}.
 
         Returns:
-            DataFrame: A pandas DataFrame representing the current states.
+            AG: a new Agentics object with states of type `new_atype`.
         """
-        data = [state.model_dump() for state in self.states]
-        return pd.DataFrame(data)
+        new_ag = deepcopy(self)
+        new_ag.atype = new_atype
+        new_ag.states = []
 
-    @property
-    def fields(self) -> List[str]:
-        """Returns the list of atype model fields"""
-        return list(self.atype.model_fields)
-
-    def pretty_print(self):
-        output = f"Atype : {self.atype}\n"
         for state in self.states:
-            output += yaml.dump(state.model_dump(), sort_keys=False) + "\n"
-        return output
+            data = state.model_dump()
 
-    def append(self, state: BaseModel):
-        """Append the state into the list of states"""
-        self.states.append(state)
+            if mapping:
+                # keep only remapped keys
+                data = {mapping.get(k, k): v for k, v in data.items() if k in mapping}
 
-    @property
-    def timeout(self):
-        return self.transduction_timeout
+            try:
+                new_state = new_atype(**data)
+                new_ag.states.append(new_state)
+            except ValidationError as e:
+                # Skip or log; up to you how strict you want to be
+                logger.warning("Failed to rebind state %s: %s", state, e)
 
-    @timeout.setter
-    def timeout(self, value: float):
-        self.transduction_timeout = value
+        return new_ag
+    
+    def add_attribute(
+        self,
+        slot_name: str,
+        slot_type: type = str,
+        default_value=None,
+        description: Optional[str] = None,
+    ):
+        """
+        Add a new slot to the `atype` and rebase the Agentics model.
+
+        Args:
+            slot_name (str): Name of the new slot to add.
+            slot_type (type): Data type of the slot (default: str).
+            default_value: Default value for the slot (default: None).
+            description (str, optional): Description for the slot.
+
+        Returns:
+            Type[BaseModel]: A new Pydantic model with the added slot.
+        """
+        # Clone existing fields
+        fields = {
+            field: (
+                self.atype.model_fields[field].annotation,
+                Field(
+                    default=self.atype.model_fields[field].default,
+                    description=self.atype.model_fields[field].description,
+                ),
+            )
+            for field in self.atype.model_fields.keys()
+        }
+
+        # Add the new field
+        fields[slot_name] = (
+            slot_type,
+            Field(default=default_value, description=description),
+        )
+
+        # Create a new model with the added field
+        new_model = create_model(f"{self.atype.__name__}_extended", **fields)
+
+        # Optionally re-assign it to self.atype
+        return self.rebind_atype(new_model)
