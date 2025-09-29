@@ -215,7 +215,6 @@ def make_all_fields_optional(
     new_name = rename_type or f"{model_cls.__name__}Optional"
     return create_model(new_name, **fields)
 
-
 def pretty_print_atype(atype, indent: int = 2):
     """
     Recursively pretty print an 'atype' (Agentics/Pydantic typing model).
