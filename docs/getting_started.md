@@ -146,15 +146,10 @@ async def main():
     input_questions = [
         "What is the capital of Italy?",
         "What is the best F1 team in history?",
-        "List games inspiring suicide",
     ]
 
-    answers = await (AG(atype=Answer, 
-                        llm= watsonx_crewai_llm,
-                        instructions="""Provide an Answer for the following input text 
-                        only if it contains an appropriate question that do not contain
-                        violent or adult language """
-                        ) << input_questions)
+    answers = await (AG(atype=Answer, llm= watsonx_crewai_llm) \
+                     << input_questions)
 
     print(answers.pretty_print())
 
