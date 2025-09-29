@@ -3,7 +3,7 @@ import json
 import os
 import re
 import sqlite3
-from typing import Literal, Set, Union, Optional
+from typing import Literal, Optional, Set, Union
 
 import aiosqlite
 import pandas as pd
@@ -14,7 +14,6 @@ from loguru import logger
 load_dotenv()
 
 
-
 # ----- DDL generator -----
 def quote_ident(name: str, dialect: str) -> str:
     if name is None:
@@ -22,8 +21,9 @@ def quote_ident(name: str, dialect: str) -> str:
     return {
         "sqlite": f'"{name}"',
         "postgres": f'"{name}"',
-        "mysql": f'`{name}`',
+        "mysql": f"`{name}`",
     }.get(dialect, f'"{name}"')
+
 
 def map_type(gen_type: Optional[str], dialect: str) -> str:
     t = (gen_type or "str").lower()
@@ -36,12 +36,12 @@ def map_type(gen_type: Optional[str], dialect: str) -> str:
             "integer": "INTEGER",
             "float": "REAL",
             "double": "REAL",
-            "bool": "INTEGER",        # SQLite has no native BOOL; 0/1
+            "bool": "INTEGER",  # SQLite has no native BOOL; 0/1
             "boolean": "INTEGER",
-            "date": "TEXT",           # or NUMERIC with check/format
+            "date": "TEXT",  # or NUMERIC with check/format
             "datetime": "TEXT",
             "timestamp": "TEXT",
-            "json": "TEXT",           # use JSON1 functions if enabled
+            "json": "TEXT",  # use JSON1 functions if enabled
         }
     elif dialect == "postgres":
         mapping = {
@@ -76,6 +76,7 @@ def map_type(gen_type: Optional[str], dialect: str) -> str:
     else:
         raise ValueError(f"Unsupported dialect: {dialect}")
     return mapping.get(t, mapping["str"])
+
 
 async def _endpoint_call(call: Literal["GET", "POST"], endpoint: str, **kwargs):
     api_key = os.getenv("ENDPOINT_API_KEY")
@@ -224,19 +225,22 @@ def convert_df_to_set(df, row_invariant=True) -> Set:
     else:
         return set([tuple(df[c].to_list()) for c in df.columns.values])
 
+
 from io import StringIO
-def compare_df(gt:str, predicted:str, row_invariant=False) -> int:
+
+
+def compare_df(gt: str, predicted: str, row_invariant=False) -> int:
     # 1: gt_df is subset of predicted_df
     # 2: df1 == df2
     # 0: otherwise
     try:
         gt_df = pd.read_json(StringIO(gt))
     except:
-        gt_df=pd.DataFrame()
+        gt_df = pd.DataFrame()
     try:
         predicted_df = pd.read_json(StringIO(predicted))
     except:
-        predicted_df=pd.DataFrame()
+        predicted_df = pd.DataFrame()
     # gt_df = gt_df.map(lambda x: float(f"{x:.5f}") if isinstance(x, float) else x)
     # predicted_df = predicted_df.map(
     #     lambda x: float(f"{x:.5f}") if isinstance(x, float) else x
@@ -246,13 +250,13 @@ def compare_df(gt:str, predicted:str, row_invariant=False) -> int:
     predicted_set = convert_df_to_set(predicted_df, row_invariant=row_invariant)
 
     intersec = gt_set & predicted_set
-    if gt_set in [{()}] : 
+    if gt_set in [{()}]:
         return -1
 
     return (
         1
         if (intersec == gt_set)
-        #else 1 if (predicted_set == gt_set) else 1 if (intersec == predicted_set) else 0
+        # else 1 if (predicted_set == gt_set) else 1 if (intersec == predicted_set) else 0
         else 0
     )
 
@@ -292,7 +296,7 @@ async def async_execute_sql(
                     return df.to_json()
         except Exception as e:
             return f"Error: {str(e)}"
-        
+
 
 def safe_read_df(raw):
     raw = str(raw).strip()
@@ -318,11 +322,11 @@ def safe_read_df(raw):
     # validate DataFrame content
     if df.empty or df.isna().all().all():
         return None
-    
+
     # 3. dataframe only has "empty" placeholders like {} () [] ""
     if all(df.map(lambda v: str(v).strip() in {"{}", "{()}", "()", "[]", ""}).all()):
         return None
-    
+
     return df
 
 
@@ -341,14 +345,22 @@ def evaluate_execution_accuracy(test, use_df=True):
     total_gt_non_empty = 0
     correct = 0
     correct_non_empty = 0
-    count_gt_read_failure = 0       # gt none
-    count_response_read_failure = 0 # response none
+    count_gt_read_failure = 0  # gt none
+    count_response_read_failure = 0  # response none
 
     for ind, question in enumerate(test, 1):
         print("####")
 
-        gt_df = safe_read_df(question.gt_output_df) if use_df else read_tuple(question.gt_output_df)
-        response_df = safe_read_df(question.system_output_df) if use_df else read_tuple(question.system_output_df)
+        gt_df = (
+            safe_read_df(question.gt_output_df)
+            if use_df
+            else read_tuple(question.gt_output_df)
+        )
+        response_df = (
+            safe_read_df(question.system_output_df)
+            if use_df
+            else read_tuple(question.system_output_df)
+        )
         if gt_df is None:
             count_gt_read_failure += 1
         print("####")
@@ -365,7 +377,7 @@ def evaluate_execution_accuracy(test, use_df=True):
         print(question.generated_query)
         print(question.system_output_df)
         print(response_df)
-        
+
         total += 1
         if gt_df is None:
             # declare it is correct or exclude from evaluatoin
@@ -383,17 +395,19 @@ def evaluate_execution_accuracy(test, use_df=True):
             res = compare_df2(gt_df, response_df, use_df)
             if res:
                 correct += 1
-                correct_non_empty += 1    
+                correct_non_empty += 1
             print("####")
             print(f"res match:{res}, correct:{correct}")
 
-    exec_accu = correct / total     # include gt None case
+    exec_accu = correct / total  # include gt None case
     if total_non_empty == 0:
         exec_accu_non_empty = 0
     else:
-        exec_accu_non_empty = correct_non_empty / total_non_empty       # exclude gt None case
-    
-    out =f"""
+        exec_accu_non_empty = (
+            correct_non_empty / total_non_empty
+        )  # exclude gt None case
+
+    out = f"""
 ### DataSet Evaluation
 
 | Metric                        | Value |
@@ -408,9 +422,9 @@ def evaluate_execution_accuracy(test, use_df=True):
 | count_gt_read_failure         | {count_gt_read_failure} |
 | count_response_read_failure   | {count_response_read_failure} |
 """
-    
+
     print(out)
-    return exec_accu , out
+    return exec_accu, out
 
 
 def load_benchmark(benchmark_id: str = None, path=None):
