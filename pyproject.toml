@@ -72,6 +72,10 @@ docs = [
     "mkdocs-material>=9.6.18",
     "mkdocstrings>=0.30.0",
 ]
+rhel = [
+    "chromadb>=1.1.0",
+    "pysqlite3-binary>=0.5.4",
+]
 
 
 [tool.isort]
