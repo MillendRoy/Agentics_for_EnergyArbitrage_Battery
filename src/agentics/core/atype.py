@@ -1,14 +1,30 @@
-from pydantic import BaseModel, create_model, Field
-from typing import Any, Optional, get_origin,get_args, Dict, Union, List, Set, Tuple, Type
-from agentics.core.utils import sanitize_field_name
-import pandas as pd
 import csv
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+    get_args,
+    get_origin,
+)
+
+import pandas as pd
+from pydantic import BaseModel, Field, create_model
+
+from agentics.core.utils import sanitize_field_name
+
 
 class AGString(BaseModel):
-    string:Optional[str] = None
+    string: Optional[str] = None
+
 
 #####################################
 ####### Utils #######################
+
 
 def pretty_print_atype(atype, indent: int = 2):
     """
@@ -40,7 +56,6 @@ def copy_attribute_values(
     source_value = getattr(state, source_attribute)
     setattr(state, target_attribute, source_value)
     return state
-
 
 
 def get_active_fields(state: BaseModel, allowed_fields: Set[str] = None) -> Set[str]:
@@ -183,7 +198,6 @@ def create_pydantic_model(
     return create_model(model_name, **field_definitions)
 
 
-
 def make_all_fields_optional(
     model_cls: type[BaseModel], rename_type: str = None
 ) -> type[BaseModel]:
@@ -214,6 +228,7 @@ def make_all_fields_optional(
 
     new_name = rename_type or f"{model_cls.__name__}Optional"
     return create_model(new_name, **fields)
+
 
 def pretty_print_atype(atype, indent: int = 2):
     """

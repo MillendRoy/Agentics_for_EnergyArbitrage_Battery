@@ -3,7 +3,7 @@ import json
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from typing import Any, Callable, List, Optional, Type, Union
+from typing import Any, Callable, List, Type, Union
 
 from crewai import Agent, Crew, Process, Task
 from dotenv import load_dotenv
@@ -12,7 +12,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from agentics.core.llm_connections import watsonx_llm
-from agentics.core.utils import gather_with_progress, openai_response
+from agentics.core.utils import async_odered_progress, openai_response
 
 load_dotenv()
 
@@ -47,17 +47,12 @@ class AsyncExecutor(ABC):
                 answers = [e]
         else:
             # A list of inputs gathers all async calls as tasks
-            tasks = [
-                asyncio.create_task(
-                    asyncio.wait_for(self._execute(i), timeout=self.timeout)
-                )
-                for i in inputs
-            ]
-            answers = await gather_with_progress(
-                tasks, description=description, return_exceptions=True
+            answers = await async_odered_progress(
+                inputs, self._execute, description=description, timeout=self.timeout
             )
-            for i, task in enumerate(tasks):
-                if task.exception() and self._retry < self.max_retries:
+
+            for i, answer in enumerate(answers):
+                if isinstance(answer, Exception) and self._retry < self.max_retries:
                     _inputs.append(inputs[i])
                     _indices.append(i)
         self._retry += 1
