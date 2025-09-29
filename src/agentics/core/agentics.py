@@ -6,6 +6,7 @@ import time
 from collections.abc import Iterable
 from copy import copy, deepcopy
 from functools import partial, reduce
+from itertools import zip_longest
 from typing import (
     Any,
     Callable,
@@ -25,7 +26,7 @@ from crewai import LLM
 from langchain_core.prompts import PromptTemplate
 from loguru import logger
 from pandas import DataFrame
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field, create_model, ValidationError
 
 from agentics.core.async_executor import (
     PydanticTransducerCrewAI,
@@ -185,33 +186,6 @@ class AG(BaseModel, Generic[T]):
         """Returns the number of states"""
         return len(self.states)
 
-    def __call__(self, *fields, persist: Optional[Union[bool, List[str]]] = None) -> AG:
-        """
-        Returns a new agentic with the subtype of fields from self.
-
-        Args:
-            *fields (str): The fields used to create a new AG,
-                these fields are used for transductions.
-            persist (bool or list[str], optional): The created AG persists additional fields
-                from self, but those additional fields are not updated by the transduction.
-                - If persist is None, the AG atype only contains the fields
-                - If persist is True, the AG type remains the same and all the fields from
-                    self are persisted. Only the *fields are updated (similar to self-transduction)
-                - If persist is a list of strings, a new AG is created that includes the *fields as
-                    well as the persistent fields given. Only the *fields are updated
-        """
-        if persist and isinstance(persist, bool):
-            new_ag = self.clone()
-            new_ag.transduce_fields = list(fields)
-            return new_ag
-        elif isinstance(persist, Iterable) and all(isinstance(i, str) for i in persist):
-            all_fields = fields + tuple(persist)
-        else:
-            all_fields = fields
-        atype = self.subset_atype(all_fields)
-        new_ag = self.rebind_atype(atype, {f: f for f in all_fields})
-        new_ag.transduce_fields = list(fields)
-        return new_ag
 
     def __getitem__(self, index: int):
         """Returns the state for the provided index"""
@@ -416,6 +390,7 @@ class AG(BaseModel, Generic[T]):
         for state in self.states:
             output += yaml.dump(state.model_dump() if isinstance(state,BaseModel) else str(state), 
                                 sort_keys=False) + "\n"
+        print(output)
         return output
 
 
@@ -667,6 +642,34 @@ class AG(BaseModel, Generic[T]):
     ### Atype Manipulation Functions ####
     #####################################
 
+    def __call__(self, *fields, persist: Optional[Union[bool, List[str]]] = None) -> AG:
+        """
+        Returns a new agentic with the subtype of fields from self.
+
+        Args:
+            *fields (str): The fields used to create a new AG,
+                these fields are used for transductions.
+            persist (bool or list[str], optional): The created AG persists additional fields
+                from self, but those additional fields are not updated by the transduction.
+                - If persist is None, the AG atype only contains the fields
+                - If persist is True, the AG type remains the same and all the fields from
+                    self are persisted. Only the *fields are updated (similar to self-transduction)
+                - If persist is a list of strings, a new AG is created that includes the *fields as
+                    well as the persistent fields given. Only the *fields are updated
+        """
+        if persist and isinstance(persist, bool):
+            new_ag = self.clone()
+            new_ag.transduce_fields = list(fields)
+            return new_ag
+        elif isinstance(persist, Iterable) and all(isinstance(i, str) for i in persist):
+            all_fields = fields + tuple(persist)
+        else:
+            all_fields = fields
+        atype = self.subset_atype(all_fields)
+        new_ag = self.rebind_atype(atype, {f: f for f in all_fields})
+        new_ag.transduce_fields = list(fields)
+        return new_ag
+
     def product(self, other: AG) -> AG:
         """
         AG1.product(AG2, include_fields) returns the product of two types AG'
@@ -710,6 +713,46 @@ class AG(BaseModel, Generic[T]):
             extended_ags.append(extended_ag)
 
         return reduce((lambda x, y: AG.add_states(x, y)), extended_ags)
+    
+ 
+    
+
+    def merge(self, other: "AG") -> "AG":
+        """
+        Merge two AGs positionally:
+        - The result atype = union of fields from self.atype and other.atype.
+        - For field name conflicts, RIGHT (other) wins for both schema and values.
+        - States are merged pairwise (zip); if lengths differ, missing side contributes {}.
+
+        Returns:
+            AG with combined atype and merged states.
+        """
+
+        # 1) Build combined atype (prefer RIGHT field definitions on conflicts)
+        new_fields: Dict[str, tuple[Type, Field]] = {}
+
+        # left first...
+        for name, f in self.atype.model_fields.items():
+            new_fields[name] = (f.annotation, Field(default=f.default, description=f.description))
+
+        # ...then overlay right (right wins)
+        for name, f in other.atype.model_fields.items():
+            new_fields[name] = (f.annotation, Field(default=f.default, description=f.description))
+
+        merged_atype = create_model(
+            f"{self.atype.__name__}__merge__{other.atype.__name__}",
+            **new_fields
+        )
+
+        # 2) Pairwise merge states (right wins on value conflicts)
+        merged_states = []
+        for left_state, right_state in zip_longest(self.states, other.states, fillvalue=None):
+            left = left_state.model_dump() if left_state is not None else {}
+            right = right_state.model_dump() if right_state is not None else {}
+            data = left | right  # right overwrites left for same keys
+            merged_states.append(merged_atype(**data))
+
+        return AG(atype=merged_atype, states=merged_states)
 
     def quotient(self, other: AG) -> List[AG]:
         """
@@ -782,22 +825,44 @@ class AG(BaseModel, Generic[T]):
         return create_model("_".join(include_fields), **fields)
 
     def rebind_atype(
-        self, new_atype: BaseModel, mapping: Dict[str, str] = None
-    ) -> BaseModel:
-        """Return an agentic of type atype where all the states have been converted to atype, keeping only the matching attributes, discariding the remaining."""
+        self,
+        new_atype: Type[BaseModel],
+        mapping: Dict[str, str] | None = None):
+        """
+        Return a new AG whose `atype` is rebound to `new_atype`.
+
+        Each state is converted into an instance of `new_atype`.
+        - If `mapping` is provided, it remaps source field names to target names.
+        - Only matching attributes are kept; extra fields are discarded.
+        - If a state cannot be converted, it is skipped (with a warning).
+
+        Args:
+            new_atype: Target Pydantic model class.
+            mapping: Optional dict mapping {old_key: new_key}.
+
+        Returns:
+            AG: a new Agentics object with states of type `new_atype`.
+        """
         new_ag = deepcopy(self)
         new_ag.atype = new_atype
         new_ag.states = []
 
         for state in self.states:
+            data = state.model_dump()
+
             if mapping:
-                new_state = remap_dict_keys(state.model_dump(), mapping)
-                new_ag.states.append(new_atype(**new_state))
+                # keep only remapped keys
+                data = {mapping.get(k, k): v for k, v in data.items() if k in mapping}
 
-            else:
-                new_ag.states.append(new_atype(**state.model_dump()))
+            try:
+                new_state = new_atype(**data)
+                new_ag.states.append(new_state)
+            except ValidationError as e:
+                # Skip or log; up to you how strict you want to be
+                logger.warning("Failed to rebind state %s: %s", state, e)
+
         return new_ag
-
+    
     def add_attribute(
         self,
         slot_name: str,
