@@ -151,7 +151,7 @@ async def main():
     answers = await (AG(atype=Answer, llm= watsonx_crewai_llm) \
                      << input_questions)
 
-    print(answers.pretty_print())
+    answers.pretty_print()
 
 asyncio.run(main())
 ```

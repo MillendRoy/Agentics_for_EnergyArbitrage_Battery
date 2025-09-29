@@ -64,6 +64,7 @@ async def get_schema(state:Text2sqlQuestion)-> Text2sqlQuestion:
     return state
 
 async def enrich_all_dbs(test:AG):
+    print("OOOOOOOO")
     dbs=set()
     filtered_test=AG(atype=Text2sqlQuestion)
     for question in test:
@@ -72,7 +73,8 @@ async def enrich_all_dbs(test:AG):
             filtered_test.states.append(question)
             dbs.add(question.db_id)
 
-    await filtered_test.amap(load_db)
+    filtered_test = await filtered_test.amap(load_db)
+    return await filtered_test.amap(enrich_db)
 
 
 async def load_db(state:Text2sqlQuestion)-> Text2sqlQuestion:
@@ -83,7 +85,9 @@ async def load_db(state:Text2sqlQuestion)-> Text2sqlQuestion:
         state.ddl=state.db.db_schema.model_dump_json()
     return state
 async def enrich_db(state:Text2sqlQuestion)-> Text2sqlQuestion:
+    print("AAAAA")
     state.db= await state.db.load_enrichments()
+    print("BBBBB", state.db)
     state.ddl = state.db.db_schema.model_dump_json()
     return state
 

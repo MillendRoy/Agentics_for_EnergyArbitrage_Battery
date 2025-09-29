@@ -42,82 +42,83 @@ class DBSchema(BaseModel):
     description:Optional[str]=None
     tables:Optional[Dict[str,Table]]={}
 
-    def generate_ddl(self, dialect: str = "sqlite", include_drop: bool = False)->str:
-        """
-        Generate DDL for the given DBSchema.
-        dialect: 'sqlite' | 'postgres' | 'mysql'
-        """
-        if self is None or not self.tables:
-            return ""
+    # def generate_ddl(self, dialect: str = "sqlite", include_drop: bool = False)->str:
+    #     """
+    #     Generate DDL for the given DBSchema.
+    #     dialect: 'sqlite' | 'postgres' | 'mysql'
+    #     """
+    #     if self is None or not self.tables:
+    #         return ""
 
-        lines = []
+    #     lines = []
 
-        # Optional database comment/annotation
-        if self.name:
-            db_title = f"-- Schema: {self.name}"
-            lines.append(db_title)
-        if self.description:
-            lines.append(f"-- {self.description}")
+    #     # Optional database comment/annotation
+    #     if self.name:
+    #         db_title = f"-- Schema: {self.name}"
+    #         lines.append(db_title)
+    #     if self.description:
+    #         lines.append(f"-- {self.description}")
 
-        for tname, table in (self.tables or {}).items():
-            if table is None:
-                continue
-            table_name = table.name or tname
-            q_table = quote_ident(table_name, dialect)
+    #     for tname, table in (self.tables or {}).items():
+    #         if table is None:
+    #             continue
+    #         table_name = table.name or tname
+    #         q_table = quote_ident(table_name, dialect)
 
-            if include_drop:
-                if dialect == "sqlite":
-                    lines.append(f'DROP TABLE IF EXISTS {q_table};')
-                elif dialect == "postgres":
-                    lines.append(f'DROP TABLE IF EXISTS {q_table} CASCADE;')
-                elif dialect == "mysql":
-                    lines.append(f'DROP TABLE IF EXISTS {q_table};')
+    #         if include_drop:
+    #             if dialect == "sqlite":
+    #                 lines.append(f'DROP TABLE IF EXISTS {q_table};')
+    #             elif dialect == "postgres":
+    #                 lines.append(f'DROP TABLE IF EXISTS {q_table} CASCADE;')
+    #             elif dialect == "mysql":
+    #                 lines.append(f'DROP TABLE IF EXISTS {q_table};')
 
-            # Build column definitions
-            cols = []
-            col_items = (table.columns or {}).items()
-            # Ensure deterministic order
-            for cname, col in sorted(col_items, key=lambda kv: kv[0]):
-                if col is None:
-                    continue
-                col_name = col.column_name or cname
-                q_col = quote_ident(col_name, dialect)
-                sql_type = map_type(col.type, dialect)
+    #         # Build column definitions
+    #         cols = []
+    #         col_items = (table.columns or {}).items()
+    #         # Ensure deterministic order
+    #         for cname, col in sorted(col_items, key=lambda kv: kv[0]):
+    #             if col is None:
+    #                 continue
+    #             col_name = col.column_name or cname
+    #             q_col = quote_ident(col_name, dialect)
+    #             sql_type = map_type(col.type, dialect)
 
-                if dialect == "mysql" and col.description:
-                    cols.append(f"{q_col} {sql_type} COMMENT {repr(col.description)}")
-                else:
-                    cols.append(f"{q_col} {sql_type}")
+    #             if dialect == "mysql" and col.description:
+    #                 cols.append(f"{q_col} {sql_type} COMMENT {repr(col.description)}")
+    #             else:
+    #                 cols.append(f"{q_col} {sql_type}")
 
-            # Fallback if no columns
-            if not cols:
-                cols = ["-- (no columns specified)"]
+    #         # Fallback if no columns
+    #         if not cols:
+    #             cols = ["-- (no columns specified)"]
 
-            create_stmt = f"CREATE TABLE {q_table} (\n  " + ",\n  ".join(cols) + "\n);"
-            lines.append(create_stmt)
+    #         create_stmt = f"CREATE TABLE {q_table} (\n  " + ",\n  ".join(cols) + "\n);"
+    #         lines.append(create_stmt)
 
-            # Table/column comments where supported
-            if table.description:
-                if dialect == "postgres":
-                    lines.append(f"COMMENT ON TABLE {q_table} IS {repr(table.description)};")
-                elif dialect == "mysql":
-                    # MySQL supports table comment in CREATE TABLE; add an ALTER as a fallback
-                    lines.append(f"ALTER TABLE {q_table} COMMENT = {repr(table.description)};")
-                else:
-                    lines.append(f"-- {table_name}: {table.description}")
+    #         # Table/column comments where supported
+    #         if table.description:
+    #             if dialect == "postgres":
+    #                 lines.append(f"COMMENT ON TABLE {q_table} IS {repr(table.description)};")
+    #             elif dialect == "mysql":
+    #                 # MySQL supports table comment in CREATE TABLE; add an ALTER as a fallback
+    #                 lines.append(f"ALTER TABLE {q_table} COMMENT = {repr(table.description)};")
+    #             else:
+    #                 lines.append(f"-- {table_name}: {table.description}")
 
-            if dialect == "postgres":
-                for cname, col in sorted((table.columns or {}).items(), key=lambda kv: kv[0]):
-                    if col and col.description:
-                        q_col = quote_ident(col.column_name or cname, dialect)
-                        lines.append(f"COMMENT ON COLUMN {q_table}.{q_col} IS {repr(col.description)};")
-            elif dialect == "sqlite":
-                # SQLite: use comments as inline '--' annotations
-                for cname, col in sorted((table.columns or {}).items(), key=lambda kv: kv[0]):
-                    if col and col.description:
-                        lines.append(f"-- {table_name}.{col.column_name or cname}: {col.description}")
-        return "\n".join(lines)
-
+    #         if dialect == "postgres":
+    #             for cname, col in sorted((table.columns or {}).items(), key=lambda kv: kv[0]):
+    #                 if col and col.description:
+    #                     q_col = quote_ident(col.column_name or cname, dialect)
+    #                     lines.append(f"COMMENT ON COLUMN {q_table}.{q_col} IS {repr(col.description)};")
+    #         elif dialect == "sqlite":
+    #             # SQLite: use comments as inline '--' annotations
+    #             for cname, col in sorted((table.columns or {}).items(), key=lambda kv: kv[0]):
+    #                 if col and col.description:
+    #                     lines.append(f"-- {table_name}.{col.column_name or cname}: {col.description}")
+    #     return "\n".join(lines)
+    def generate_ddl(self): 
+        return self.model_dump_json()
 
 
 # class QueryExecution(BaseModel):
@@ -238,6 +239,11 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
 
 
     def get_schema_from_sqllite(self, add_sample_values: int = 5):
+        if not self.db_path:
+            self.db_path = os.path.join(os.getenv("SQL_DB_PATH"), 
+                                            self.benchmark_id,self.db_id, 
+                                            self.db_id+".sqlite" )
+        
         self.db_schema=DBSchema()
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -306,10 +312,8 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
             columns = await columns.self_transduction(["table","column_name","type","sample_values"],
                                       ["description"],
                                       instructions=f"You are analyzing a this db: {self.db_name}Read the following ddl: {self.ddl} \n\nGenerate a one sentence description for the input column")
-            #print(generate_ddl(self))
             for column in columns:
                 self.db_schema.tables[column.table].columns[column.column_name].description=column.description
-            #print(columns.pretty_print())
         return self
 
 
@@ -319,7 +323,7 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
         dbs = AG(atype=DB, states=[self])
 
         dbs = await dbs.self_transduction(
-            ["db_name", "ddl", "tables"],
+            ["db_name", "ddl"],
             ["database_schema_description", "business_description", "keywords"],
             instructions=f"""Generate the required description of the DB from the input ddl.""",
         )
@@ -327,28 +331,37 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
         self = dbs[0]
         return self
     
+    async def load_db(self, db_path:str=None, enrichments=False):
+        if db_path: self.db_path = db_path
+        self =  self.get_schema_from_sqllite()
+        if enrichments:
+            if not self.enrichment_path:
+                self.enrichment_path = os.path.join(os.getenv("SQL_DB_PATH"),self.benchmark_id, 
+                                        self.db_id,self.db_id+"_enriched.json" )
+            self = await self.load_enrichments()
+        return self
+    
+    async def generate_enrichments(self):
+        self.ddl = self.db_schema.generate_ddl()
+        self = await self.generate_db_description()
+        self = await self.get_schema_enrichments()
+        with open(self.enrichment_path, "w") as f: f.write(self.model_dump_json())
+        return self
 
     async def load_enrichments(self):
+        
         if not self.enrichment_path:
             self.enrichment_path = os.path.join(os.getenv("SQL_DB_PATH"),self.benchmark_id, 
                                     self.db_id,self.db_id+"_enriched.json" )
-        if not self.db_path:
-            self.db_path = os.path.join(os.getenv("SQL_DB_PATH"),self.benchmark_id, 
-                            self.db_id,self.db_id+".sqlite" )
+        
         try:
             with open(self.enrichment_path, "r", encoding="utf-8") as f:
                 db_dict = json.load(f)
-                db=DB(**db_dict)
+                self=DB(**db_dict)
         except:
             logger.error(f"Failed to load enrichments from file {self.enrichment_path}. Generating new Enrichments")
-            db=DB(benchmark_id=self.benchmark_id,endpoint_id=self.endpoint_id,db_id=self.db_id, db_path=self.db_path)
-            db = db.get_schema_from_sqllite()
-            db = await db.generate_db_description()
-            db = await db.get_schema_enrichments()
-            db.ddl = db.db_schema.generate_ddl()
-            with open(self.enrichment_path, "w") as f: f.write(db.model_dump_json())
-        self = db
-        return db 
+            self=await self.generate_enrichments()
+        return self 
             
         
                 
@@ -394,4 +407,10 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
     #                 )
     #     return dbs[0]
 
+async def main():
+    db = DB( 
+        benchmark_id='archer_en_dev' ,
+        db_id='world_1')
+    return await db.load_db(enrichments=True)
 
+print(asyncio.run(main()))

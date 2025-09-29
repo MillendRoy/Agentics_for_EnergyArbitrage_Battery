@@ -52,11 +52,11 @@ with MCPServerAdapter(server_params) as server_tools:
             atype=WebSearchReport,
             tools=server_tools,
             max_iter=10,
-            verbose_agent=True,
-            reasoning=True,
-            # description="Extract stock market price for the input day ",
+            verbose_agent=False,
+            reasoning=False,
+            description="Extract stock market price for the input day ",
             llm=AG.get_llm_provider("watsonx"),
         )
         << [input("USER> ").strip("\r")]
     )
-    print(results.pretty_print())
+    results.pretty_print()
