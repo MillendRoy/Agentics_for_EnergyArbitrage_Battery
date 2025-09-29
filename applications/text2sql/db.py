@@ -1,13 +1,15 @@
 import asyncio
+import sqlite3
 import time
-from typing import Dict, Optional, Union, List, Any
+from typing import Any, Dict, List, Optional, Union
 
-import aiosqlite, sqlite3
-from pydantic import BaseModel, Field
+import aiosqlite
 from loguru import logger
+from pydantic import BaseModel, Field
+from utils import execute_sql_on_endpoint, map_type, quote_ident
 
 from agentics import AG
-from utils import execute_sql_on_endpoint, quote_ident,map_type
+
 
 class Target(BaseModel):
     """Represent the results of the execution of a text2sql task, where the target is the ground truth"""
@@ -25,22 +27,28 @@ from abc import ABC, abstractmethod
 
 import pandas as pd
 
+
 class Column(BaseModel):
-    table:Optional[str]=None
-    column_name:Optional[str]=None
-    type:Optional[str]="str"
-    sample_values:Optional[list[Any]]=[]
-    description:Optional[str]=Field(None,description="A generated one sentence description of the column given the context of the DB in which it is located")
+    table: Optional[str] = None
+    column_name: Optional[str] = None
+    type: Optional[str] = "str"
+    sample_values: Optional[list[Any]] = []
+    description: Optional[str] = Field(
+        None,
+        description="A generated one sentence description of the column given the context of the DB in which it is located",
+    )
+
 
 class Table(BaseModel):
-    name:Optional[str]=None
-    description:Optional[str]=None
-    columns:Optional[Dict[str,Column]]={}
+    name: Optional[str] = None
+    description: Optional[str] = None
+    columns: Optional[Dict[str, Column]] = {}
+
 
 class DBSchema(BaseModel):
-    name:Optional[str]=None
-    description:Optional[str]=None
-    tables:Optional[Dict[str,Table]]={}
+    name: Optional[str] = None
+    description: Optional[str] = None
+    tables: Optional[Dict[str, Table]] = {}
 
     # def generate_ddl(self, dialect: str = "sqlite", include_drop: bool = False)->str:
     #     """
@@ -117,7 +125,7 @@ class DBSchema(BaseModel):
     #                 if col and col.description:
     #                     lines.append(f"-- {table_name}.{col.column_name or cname}: {col.description}")
     #     return "\n".join(lines)
-    def generate_ddl(self): 
+    def generate_ddl(self):
         return self.model_dump_json()
 
 
@@ -136,7 +144,6 @@ class DBSchema(BaseModel):
 # class QuestionSQLPair(BaseModel):
 #     question: Optional[str] = None
 #     sql_query: Optional[str] = None
-
 
 
 class DB(BaseModel, ABC):
@@ -160,11 +167,11 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
         None,
         description="""A Description of the business purpose of the db, what use cases it is good for how what type of information it contain""",
     )
-    db_schema:Optional[DBSchema]=DBSchema()
+    db_schema: Optional[DBSchema] = DBSchema()
 
     datasource_id: Optional[str] = None
     enrichment_path: Optional[str] = None
-    #sample_queries: Optional[list[QueryExecution]] = None
+    # sample_queries: Optional[list[QueryExecution]] = None
     # natural_language_questions: Optional[list[str]] = Field(
     #     [],
     #     description="""A list of natural language questions that could be answered from the provided DDL.""",
@@ -178,12 +185,10 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
     # )
     ddl: Optional[Union[str, list[str]]] = None
     # tables: Optional[Dict[str, str]] = {}
-    endpoint_id:Optional[str]=None
-    db_path:Optional[str]=None
-    benchmark_id:Optional[str]=None
-    db_id:Optional[str]=None
-    
-
+    endpoint_id: Optional[str] = None
+    db_path: Optional[str] = None
+    benchmark_id: Optional[str] = None
+    db_id: Optional[str] = None
 
     # @abstractmethod
     # async def async_execute_sql(self, sql_query:str) -> DataFrame:
@@ -199,9 +204,7 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
     # def load_db(cls, db_type, db_name=None, selected_db_path=None, datasource_id=None):
     #     db = DB()
 
-    async def async_execute_sql(self,
-        sql_query: str
-    ) -> str:
+    async def async_execute_sql(self, sql_query: str) -> str:
         """DB id could be a path or a Endpoint connection string"""
         if self.endpoint_id:
             return await execute_sql_on_endpoint(sql_query, self.endpoint_id)
@@ -226,32 +229,34 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
                         return df.to_json()
             except Exception as e:
                 return f"Error: {str(e)}"
-            
-
 
     def get_schema_from_file(self):
         with open(
-            os.path.join(os.getenv("SQL_BENCHMARKS_FOLDER"), self.benchmark_id + "-schema.json")
+            os.path.join(
+                os.getenv("SQL_BENCHMARKS_FOLDER"), self.benchmark_id + "-schema.json"
+            )
         ) as f:
             all_dbs = json.load(f)
 
         return all_dbs.get(self.db_id) if self.db_id else all_dbs
 
-
     def get_schema_from_sqllite(self, add_sample_values: int = 5):
         if not self.db_path:
-            self.db_path = os.path.join(os.getenv("SQL_DB_PATH"), 
-                                            self.benchmark_id,self.db_id, 
-                                            self.db_id+".sqlite" )
-        
-        self.db_schema=DBSchema()
+            self.db_path = os.path.join(
+                os.getenv("SQL_DB_PATH"),
+                self.benchmark_id,
+                self.db_id,
+                self.db_id + ".sqlite",
+            )
+
+        self.db_schema = DBSchema()
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = cursor.fetchall()
         schema_json = {}
         for table in tables:
-            db_table=Table(name=table[0])
+            db_table = Table(name=table[0])
 
             table_name = table[0]
 
@@ -268,9 +273,9 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
             }
 
             for col in schema:
-                db_table.columns[col[1]]=Column(column_name=col[1],type=col[2], table=table[0])
-
-
+                db_table.columns[col[1]] = Column(
+                    column_name=col[1], type=col[2], table=table[0]
+                )
 
             columns = [col[1] for col in schema]  # column names
             if add_sample_values:
@@ -285,39 +290,40 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
                             schema_json[table_name][col_name]["sample_values"] = []
                         schema_json[table_name][col_name]["sample_values"].append(value)
                         db_table.columns[col_name].sample_values.append(value)
-            self.db_schema.tables[db_table.name]= db_table
-        
+            self.db_schema.tables[db_table.name] = db_table
+
         self.ddl = self.db_schema.generate_ddl()
         return self
 
-   
-
     async def get_schema_enrichments(self):
         if self.db_schema:
-            columns=AG(atype=Column)
-            tables=AG(atype=Table)
+            columns = AG(atype=Column)
+            tables = AG(atype=Table)
             for table in self.db_schema.tables.keys():
-                
+
                 for column in self.db_schema.tables[table].columns.keys():
                     columns.states.append(self.db_schema.tables[table].columns[column])
                 tables.states.append(self.db_schema.tables[table])
-            
-            tables = await tables.self_transduction(["name","columns"],
-                                      ["description"],
-                                      instructions=f"You are analyzing a this db: {self.db_name}Read the following ddl: {self.ddl} \n\nGenerate a one paragraph description for the input table")
-            
+
+            tables = await tables.self_transduction(
+                ["name", "columns"],
+                ["description"],
+                instructions=f"You are analyzing a this db: {self.db_name}Read the following ddl: {self.ddl} \n\nGenerate a one paragraph description for the input table",
+            )
+
             for table in tables:
-                self.db_schema.tables[table.name].description=table.description
+                self.db_schema.tables[table.name].description = table.description
 
-            columns = await columns.self_transduction(["table","column_name","type","sample_values"],
-                                      ["description"],
-                                      instructions=f"You are analyzing a this db: {self.db_name}Read the following ddl: {self.ddl} \n\nGenerate a one sentence description for the input column")
+            columns = await columns.self_transduction(
+                ["table", "column_name", "type", "sample_values"],
+                ["description"],
+                instructions=f"You are analyzing a this db: {self.db_name}Read the following ddl: {self.ddl} \n\nGenerate a one sentence description for the input column",
+            )
             for column in columns:
-                self.db_schema.tables[column.table].columns[column.column_name].description=column.description
+                self.db_schema.tables[column.table].columns[
+                    column.column_name
+                ].description = column.description
         return self
-
-
-
 
     async def generate_db_description(self):
         dbs = AG(atype=DB, states=[self])
@@ -327,46 +333,53 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
             ["database_schema_description", "business_description", "keywords"],
             instructions=f"""Generate the required description of the DB from the input ddl.""",
         )
-        
+
         self = dbs[0]
         return self
-    
-    async def load_db(self, db_path:str=None, enrichments=False):
-        if db_path: self.db_path = db_path
-        self =  self.get_schema_from_sqllite()
+
+    async def load_db(self, db_path: str = None, enrichments=False):
+        if db_path:
+            self.db_path = db_path
+        self = self.get_schema_from_sqllite()
         if enrichments:
             if not self.enrichment_path:
-                self.enrichment_path = os.path.join(os.getenv("SQL_DB_PATH"),self.benchmark_id, 
-                                        self.db_id,self.db_id+"_enriched.json" )
+                self.enrichment_path = os.path.join(
+                    os.getenv("SQL_DB_PATH"),
+                    self.benchmark_id,
+                    self.db_id,
+                    self.db_id + "_enriched.json",
+                )
             self = await self.load_enrichments()
         return self
-    
+
     async def generate_enrichments(self):
         self.ddl = self.db_schema.generate_ddl()
         self = await self.generate_db_description()
         self = await self.get_schema_enrichments()
-        with open(self.enrichment_path, "w") as f: f.write(self.model_dump_json())
+        with open(self.enrichment_path, "w") as f:
+            f.write(self.model_dump_json())
         return self
 
     async def load_enrichments(self):
-        
+
         if not self.enrichment_path:
-            self.enrichment_path = os.path.join(os.getenv("SQL_DB_PATH"),self.benchmark_id, 
-                                    self.db_id,self.db_id+"_enriched.json" )
-        
+            self.enrichment_path = os.path.join(
+                os.getenv("SQL_DB_PATH"),
+                self.benchmark_id,
+                self.db_id,
+                self.db_id + "_enriched.json",
+            )
+
         try:
             with open(self.enrichment_path, "r", encoding="utf-8") as f:
                 db_dict = json.load(f)
-                self=DB(**db_dict)
+                self = DB(**db_dict)
         except:
-            logger.error(f"Failed to load enrichments from file {self.enrichment_path}. Generating new Enrichments")
-            self=await self.generate_enrichments()
-        return self 
-            
-        
-                
-
-
+            logger.error(
+                f"Failed to load enrichments from file {self.enrichment_path}. Generating new Enrichments"
+            )
+            self = await self.generate_enrichments()
+        return self
 
     # async def generate_questions(self, n_questions: int = 10):
     #     dbs = AG(atype=DB, states=[self])
@@ -389,7 +402,7 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
     #                 "business_description",
     #             ],
     #             ["natural_language_questions", "sql_queries"],
-    #             instructions=f"""Generate {n_questions} natural language questions that can be answered 
+    #             instructions=f"""Generate {n_questions} natural language questions that can be answered
     #             by issuing SQL queries to the provided database about the keyword {keyword}.""",
     #         )
     #         natural_language_questions += dbs[0].natural_language_questions
@@ -407,10 +420,10 @@ Examples of Strong Keywords: student_outcomes, climate_metrics, financial_foreca
     #                 )
     #     return dbs[0]
 
+
 async def main():
-    db = DB( 
-        benchmark_id='archer_en_dev' ,
-        db_id='world_1')
+    db = DB(benchmark_id="archer_en_dev", db_id="world_1")
     return await db.load_db(enrichments=True)
+
 
 print(asyncio.run(main()))
