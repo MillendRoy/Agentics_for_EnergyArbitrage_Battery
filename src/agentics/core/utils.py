@@ -6,10 +6,13 @@ from collections.abc import Iterable
 from typing import (
     Any,
     Awaitable,
+    Callable,
+    Dict,
     List,
     Optional,
+    Sequence,
+    Union,
     get_origin,
-    Dict, Union
 )
 
 import httpx
@@ -55,30 +58,29 @@ def scan_directory_recursively(path: str) -> List[str]:
 
 
 def infer_pydantic_type(dtype: Any, sample_values: pd.Series = None) -> Any:
-        if pd.api.types.is_integer_dtype(dtype):
-            return Optional[int]
-        elif pd.api.types.is_float_dtype(dtype):
-            return Optional[float]
-        elif pd.api.types.is_bool_dtype(dtype):
-            return Optional[bool]
-        elif pd.api.types.is_datetime64_any_dtype(dtype):
-            return Optional[str]  # Or datetime.datetime
-        elif sample_values is not None:
-            # Check if the column contains lists of strings
-            for val in sample_values:
-                if isinstance(val, list) and all(isinstance(x, str) for x in val):
-                    return Optional[List[str]]
-                elif isinstance(val, dict):
-                    if all(isinstance(k, str) for k in val.keys()):
-                        if all(
-                            isinstance(v, (str, list))
-                            and (isinstance(v, str) or all(isinstance(i, str) for i in v))
-                            for v in val.values()
-                        ):
-                            return Optional[Dict[str, Union[str, List[str]]]]
-                break  # Only check the first non-null value
-        return Optional[str]
-
+    if pd.api.types.is_integer_dtype(dtype):
+        return Optional[int]
+    elif pd.api.types.is_float_dtype(dtype):
+        return Optional[float]
+    elif pd.api.types.is_bool_dtype(dtype):
+        return Optional[bool]
+    elif pd.api.types.is_datetime64_any_dtype(dtype):
+        return Optional[str]  # Or datetime.datetime
+    elif sample_values is not None:
+        # Check if the column contains lists of strings
+        for val in sample_values:
+            if isinstance(val, list) and all(isinstance(x, str) for x in val):
+                return Optional[List[str]]
+            elif isinstance(val, dict):
+                if all(isinstance(k, str) for k in val.keys()):
+                    if all(
+                        isinstance(v, (str, list))
+                        and (isinstance(v, str) or all(isinstance(i, str) for i in v))
+                        for v in val.values()
+                    ):
+                        return Optional[Dict[str, Union[str, List[str]]]]
+            break  # Only check the first non-null value
+    return Optional[str]
 
 
 def sanitize_field_name(name: str) -> str:
@@ -113,7 +115,6 @@ def chunk_list(lst, chunk_size):
         list of lists: A list where each element is a sublist of length `chunk_size`, except possibly the last one.
     """
     return [lst[i : i + chunk_size] for i in range(0, len(lst), chunk_size)]
-
 
 
 def clean_for_json(obj: Any) -> Any:
@@ -240,12 +241,14 @@ def is_str_or_list_of_str(input):
     )
 
 
-async def gather_with_progress(
-    coros: Iterable[Awaitable[Any]],
+async def async_odered_progress(
+    inputs: Sequence[Any],
+    work: Callable[[Any], Awaitable[Any]],
     description: str = "Working",
-    return_exceptions: bool = False,
+    timeout: Optional[float] = None,
 ) -> list[Any]:
     """Show a Rich progress bar while awaiting async execution."""
+
     columns = (
         SpinnerColumn(),
         TimeElapsedColumn(),
@@ -255,23 +258,25 @@ async def gather_with_progress(
         TransductionSpeed(),
         TimeRemainingColumn(),
     )
-
     with Progress(*columns, transient=False) as progress:
-        task_id = progress.add_task(description, total=len(coros))
 
-        async def track(coro: Awaitable[Any]) -> Any:
+        async def track(index: int, coro: Awaitable[Any]) -> Any:
             try:
-                return await coro
+                return index, await coro
             except Exception as e:
-                if return_exceptions:
-                    return e
-                raise
+                return index, e  # TODO: we can put the retry here
             finally:
                 progress.advance(task_id)
 
-        return await asyncio.gather(
-            *(track(c) for c in coros), return_exceptions=return_exceptions
-        )
+        task_id = progress.add_task(description, total=len(inputs))
+        tasks = [asyncio.create_task(track(i, work(x))) for i, x in enumerate(inputs)]
+        results: list[Any] = [None] * len(tasks)
+
+        # complete and replace in original order
+        for fut in asyncio.as_completed(tasks, timeout=timeout):
+            i, val = await fut
+            results[i] = val
+        return results
 
 
 class TransductionSpeed(ProgressColumn):
@@ -283,4 +288,3 @@ class TransductionSpeed(ProgressColumn):
         if speed is None:
             return Text("? states/s", style="progress.data.speed")
         return Text(f"{speed:.3f} states/s", style="progress.data.speed")
-

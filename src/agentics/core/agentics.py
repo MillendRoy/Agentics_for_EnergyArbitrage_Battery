@@ -119,6 +119,11 @@ class AG(BaseModel, Generic[T]):
         model_config = {"arbitrary_types_allowed": True}
 
     @property
+    def __name__(self) -> str:
+        """Returns the name of the atype"""
+        return self.atype.__name__
+
+    @property
     def fields(self) -> List[str]:
         """Returns the list of atype model fields"""
         return list(self.atype.model_fields)
@@ -145,6 +150,7 @@ class AG(BaseModel, Generic[T]):
         return self
 
     def get_random_sample(self, percent: float) -> AG:
+        """An AG is returned with randomly selected states, given the percentage of samples to return."""
         if not (0 <= percent <= 1):
             raise ValueError("Percent must be between 0 and 1")
 
@@ -556,7 +562,7 @@ class AG(BaseModel, Generic[T]):
             )
             transduced_results = await pt.execute(
                 *input_prompts,
-                description=f"Transducing  {self.atype.__name__} << {"DefaultType" if not isinstance(other, AG) else other.atype.__name__}",
+                description=f"Transducing {self.__name__} << {"AG[str]" if not isinstance(other, AG) else other.__name__}",
             )
         except Exception as e:
             transduced_results = self.states
@@ -701,9 +707,7 @@ class AG(BaseModel, Generic[T]):
                     description=self.atype.model_fields[field].description,
                 ),
             )
-        prod_atype = create_model(
-            f"{self.atype.__name__}__{other.atype.__name__}", **new_fields
-        )
+        prod_atype = create_model(f"{self.__name__}__{other.__name__}", **new_fields)
 
         extended_ags = []
         for state in self.states:
@@ -746,7 +750,7 @@ class AG(BaseModel, Generic[T]):
             )
 
         merged_atype = create_model(
-            f"{self.atype.__name__}__merge__{other.atype.__name__}", **new_fields
+            f"{self.__name__}__merge__{other.__name__}", **new_fields
         )
 
         # 2) Pairwise merge states (right wins on value conflicts)
@@ -909,7 +913,7 @@ class AG(BaseModel, Generic[T]):
         )
 
         # Create a new model with the added field
-        new_model = create_model(f"{self.atype.__name__}_extended", **fields)
+        new_model = create_model(f"{self.__name__}_extended", **fields)
 
         # Optionally re-assign it to self.atype
         return self.rebind_atype(new_model)
