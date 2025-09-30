@@ -107,6 +107,7 @@ class AG(BaseModel, Generic[T]):
         None,
         description="""this is the list of field that will be used for the transduction, both incoming and outcoming""",
     )
+    transient_pbar: bool = False
     transduction_logs_path: Optional[str] = Field(
         None,
         description="""If not null, the specified file will be created and used to save the intermediate results of transduction from each batch. The file will be updated in real time and can be used for monitoring""",
@@ -235,7 +236,7 @@ class AG(BaseModel, Generic[T]):
                 _states.append(result)
         if self.verbose_transduction:
             if n_errors:
-                logger.debug(f"ERROR, {n_errors} states have not been transduced")
+                logger.debug(f"Error, {n_errors} states have not been transduced")
 
         self.states = _states
         return self
@@ -389,7 +390,7 @@ class AG(BaseModel, Generic[T]):
     ##################################
 
     def pretty_print(self):
-        output = f"Atype : {self.atype}\n"
+        output = f"aType : {self.atype}\n"
         for state in self.states:
             output += (
                 yaml.dump(
@@ -563,6 +564,7 @@ class AG(BaseModel, Generic[T]):
             transduced_results = await pt.execute(
                 *input_prompts,
                 description=f"Transducing {self.__name__} << {"AG[str]" if not isinstance(other, AG) else other.__name__}",
+                transient_pbar=self.transient_pbar
             )
         except Exception as e:
             transduced_results = self.states
@@ -579,7 +581,7 @@ class AG(BaseModel, Generic[T]):
                 output_states.append(result)
         if self.verbose_transduction:
             if n_errors:
-                logger.debug(f"⚠️  {n_errors} states have not been transduced")
+                logger.debug(f"Error: {n_errors} states have not been transduced")
 
         if self.transduction_logs_path:
             with open(self.transduction_logs_path, "a") as f:
