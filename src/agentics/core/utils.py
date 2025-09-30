@@ -18,7 +18,6 @@ from typing import (
 import httpx
 import pandas as pd
 from dotenv import load_dotenv
-from json_schema_to_pydantic import create_model as json_create_model
 from loguru import logger
 from openai import APIStatusError, AsyncOpenAI
 from pydantic import BaseModel, Field, create_model
@@ -34,6 +33,7 @@ from rich.progress import (
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
+from numerize.numerize import numerize
 
 load_dotenv()
 
@@ -231,7 +231,7 @@ def make_all_fields_optional(
             Field(default=None, title=field.title, description=field.description),
         )
 
-    new_name = rename_type or f"{model_cls.__name__}Optional"
+    new_name = rename_type or f"{model_cls.__name__} (optional)"
     return create_model(new_name, **fields)
 
 
@@ -246,19 +246,36 @@ async def async_odered_progress(
     work: Callable[[Any], Awaitable[Any]],
     description: str = "Working",
     timeout: Optional[float] = None,
+    transient_pbar: bool = False,
 ) -> list[Any]:
     """Show a Rich progress bar while awaiting async execution."""
-
-    columns = (
-        SpinnerColumn(),
-        TimeElapsedColumn(),
-        TextColumn(f"[bold]{description}"),
-        BarColumn(),
-        MofNCompleteColumn(),
-        TransductionSpeed(),
-        TimeRemainingColumn(),
-    )
-    with Progress(*columns, transient=False) as progress:
+    if transient_pbar:
+        columns = (
+            SpinnerColumn(style="grey50"),
+            StyledColumn(TimeElapsedColumn()),
+            TextColumn("{task.description}", style="grey50"),
+            BarColumn(
+                bar_width=40,
+                style="grey30",
+                complete_style="grey58",
+                finished_style="grey62",
+                pulse_style="grey50",
+            ),
+            StyledColumn(MofNCompleteColumn()),
+            StyledColumn(TransductionSpeed()),
+            StyledColumn(TimeRemainingColumn()),
+        )
+    else:
+        columns = (
+            SpinnerColumn(),
+            TimeElapsedColumn(),
+            TextColumn(f"[bold]{description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TransductionSpeed(),
+            TimeRemainingColumn(),
+        )
+    with Progress(*columns, transient=transient_pbar) as progress:
 
         async def track(index: int, coro: Awaitable[Any]) -> Any:
             try:
@@ -279,6 +296,22 @@ async def async_odered_progress(
         return results
 
 
+class StyledColumn(ProgressColumn):
+    """Apply a Rich style to the renderable of another column."""
+
+    def __init__(self, inner: ProgressColumn, style: str = "grey50"):
+        super().__init__()
+        self.inner = inner
+        self.style = style
+
+    def render(self, task: Task):
+        r = self.inner.render(task)
+        if isinstance(r, Text):
+            r.stylize(self.style)
+            return r
+        return Text(str(r), style=self.style)
+
+
 class TransductionSpeed(ProgressColumn):
     """Renders human readable transfer speed."""
 
@@ -287,4 +320,4 @@ class TransductionSpeed(ProgressColumn):
         speed = task.finished_speed or task.speed
         if speed is None:
             return Text("? states/s", style="progress.data.speed")
-        return Text(f"{speed:.3f} states/s", style="progress.data.speed")
+        return Text(f"{numerize(speed, 2)} states/s", style="progress.data.speed")

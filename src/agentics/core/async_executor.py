@@ -1,5 +1,4 @@
 import asyncio
-import json
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
@@ -30,7 +29,10 @@ class AsyncExecutor(ABC):
         [setattr(self, name, value) for name, value in kwargs.items()]
 
     async def execute(
-        self, *inputs: Union[BaseModel, str], description: str = "Executing"
+        self,
+        *inputs: Union[BaseModel, str],
+        description: str = "Executing",
+        transient_pbar: bool = False,
     ) -> Union[BaseModel, Iterable[BaseModel]]:
         _inputs = []
         _indices = []
@@ -48,7 +50,11 @@ class AsyncExecutor(ABC):
         else:
             # A list of inputs gathers all async calls as tasks
             answers = await async_odered_progress(
-                inputs, self._execute, description=description, timeout=self.timeout
+                inputs,
+                self._execute,
+                description=description,
+                timeout=self.timeout,
+                transient_pbar=transient_pbar,
             )
 
             for i, answer in enumerate(answers):
@@ -61,6 +67,7 @@ class AsyncExecutor(ABC):
             _answers = await self.execute(
                 *_inputs,
                 description=f"Retrying {len(_inputs)} state(s), attempt {self._retry}",
+                transient_pbar=True,
             )
             for i, answer in zip(_indices, _answers):
                 answers[i] = answer
