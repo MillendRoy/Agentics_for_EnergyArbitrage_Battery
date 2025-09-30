@@ -9,6 +9,7 @@ from openai import AsyncOpenAI
 
 load_dotenv()
 
+verbose = False
 
 def get_llm_provider(provider_name: str = None) -> LLM:
     """
@@ -27,9 +28,10 @@ def get_llm_provider(provider_name: str = None) -> LLM:
 
     if provider_name is None or provider_name == "":
         if len(available_llms) > 0:
-            logger.debug(
-                f"Available LLM providers: {list(available_llms)}. None specified, defaulting to '{list(available_llms)[0]}'"
-            )
+            if verbose:
+                logger.debug(
+                    f"Available LLM providers: {list(available_llms)}. None specified, defaulting to '{list(available_llms)[0]}'"
+                )
             return list(available_llms.values())[0]
         else:
             raise ValueError(
@@ -38,7 +40,8 @@ def get_llm_provider(provider_name: str = None) -> LLM:
 
     else:
         if provider_name in available_llms:
-            logger.debug(f"Using specified LLM provider: {provider_name}")
+            if verbose:
+                logger.debug(f"Using specified LLM provider: {provider_name}")
             return available_llms[provider_name]
         else:
             raise ValueError(
