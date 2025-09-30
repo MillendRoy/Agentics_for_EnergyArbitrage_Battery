@@ -136,9 +136,9 @@ class AG(BaseModel, Generic[T]):
     def timeout(self, value: float):
         self.transduction_timeout = value
 
-    ###################################
-    #### Agentics Utilities   #########
-    ###################################
+    ################################
+    ##### Agentics Utilities   #####
+    ################################
     def clone(agentics_instance):
         copy_instance = copy(agentics_instance)
         copy_instance.states = deepcopy(agentics_instance.states)
@@ -159,9 +159,9 @@ class AG(BaseModel, Generic[T]):
         output.states = random.sample(self.states, sample_size)
         return output
 
-    ##############
-    ### LLMs  ####
-    ##############
+    #################
+    ##### LLMs  #####
+    #################
 
     @staticmethod
     def create_crewai_llm(**kwargs):
@@ -183,9 +183,9 @@ class AG(BaseModel, Generic[T]):
             return available_llms[provider_name]
         raise ValueError(f"Unknown provider: {provider_name}")
 
-    ##############################
-    #### List Functionalities ####
-    ##############################
+    ################################
+    ##### List Functionalities #####
+    ################################
 
     def __iter__(self):
         """Iterates over the list of states"""
@@ -203,9 +203,9 @@ class AG(BaseModel, Generic[T]):
         """Append the state into the list of states"""
         self.states.append(state)
 
-    ########################################
-    #### aMapReduce Functionalities ########
-    ########################################
+    ######################################
+    ##### aMapReduce Functionalities #####
+    ######################################
 
     async def amap(self, func: StateOperator, timeout=None) -> AG:
         """Asynchronous map with exception-safe job gathering"""
@@ -263,9 +263,9 @@ class AG(BaseModel, Generic[T]):
         self.states = [output] if isinstance(output, BaseModel) else output
         return self
 
-    ###############################
-    #### Import Functionalities ###
-    ###############################
+    ##################################
+    ##### Import Functionalities #####
+    ##################################
 
     @classmethod
     def from_states(cls, states: List[BaseModel], atype: BaseModel = None) -> AG:
@@ -384,9 +384,9 @@ class AG(BaseModel, Generic[T]):
                 c_row += 1
             return cls(states=states, atype=new_type)
 
-    ###############################
-    #### Export Functionalities ###
-    ###############################
+    ##################################
+    ##### Export Functionalities #####
+    ##################################
 
     def pretty_print(self):
         output = f"Atype : {self.atype}\n"
@@ -434,9 +434,9 @@ class AG(BaseModel, Generic[T]):
         data = [state.model_dump() for state in self.states]
         return pd.DataFrame(data)
 
-    ##########################################
-    ##### Logical Transduction ###############
-    ##########################################
+    ################################
+    ##### Logical Transduction #####
+    ################################
 
     async def __lshift__(self, other):
         """This is a transduction operation projecting a list of pydantic objects of into a target types
@@ -647,9 +647,9 @@ class AG(BaseModel, Generic[T]):
         output = await output_process
         return output
 
-    #####################################
-    ### Atype Manipulation Functions ####
-    #####################################
+    ########################################
+    ##### aType Manipulation Functions #####
+    ########################################
 
     def __call__(self, *fields, persist: Optional[Union[bool, List[str]]] = None) -> AG:
         """
