@@ -41,6 +41,17 @@ def copy_attribute_values(
     setattr(state, target_attribute, source_value)
     return state
 
+def get_pydantic_fields(atype: Type[BaseModel]) -> pd.DataFrame:
+    rows = []
+    for field_name, field in atype.model_fields.items():
+        rows.append({
+            "Field": field_name,
+            "Type": str(field.annotation),         # Type annotation
+            "Description": field.description       # Description from Field(...)
+        })
+
+    # Create DataFrame
+    return pd.DataFrame(rows)
 
 
 def get_active_fields(state: BaseModel, allowed_fields: Set[str] = None) -> Set[str]:
@@ -172,6 +183,7 @@ def create_pydantic_model(
         model_name = name
 
     field_definitions = {}
+    print(fields)
     for field_name, type_name, description, required in fields:
         # ptype = type_mapping.get(model_name, str)  # default to str if unknown
 
