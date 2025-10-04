@@ -115,7 +115,7 @@ class EnergyDataLoader:
     async def get_summary_stats_from_ag(ag_data: AG, column: Optional[str] = None) -> SummaryStats | Dict:
         """
         Compute summary statistics (min, max, avg, median, percentiles, std, var)
-        and return as Pydantic schema (SummaryStats).
+        and return as Agentics Object for (SummaryStats).
         """
         prices = np.array([s.prices for s in ag_data.states if s.prices is not None], dtype=float)
         consumption = np.array([s.consumption for s in ag_data.states if s.consumption is not None], dtype=float)
