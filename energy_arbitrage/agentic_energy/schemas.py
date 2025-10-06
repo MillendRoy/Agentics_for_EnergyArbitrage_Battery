@@ -30,3 +30,47 @@ class EnergyDataRecord(BaseModel):
     consumption: Optional[float] = Field(None, description="Energy consumption")
     year: Optional[int] = Field(None, description="Year extracted from timestamp")
     region: Optional[str] = Field(None, description="Energy market region")
+
+class BatteryParams(BaseModel):
+    capacity_kwh: float = Field(100.0, gt=0)      # C
+    soc_init: float = Field(0.5, ge=0, le=1)
+    soc_min: float = 0.0
+    soc_max: float = 1.0
+    cmax_kw: float = Field(50, gt=0)
+    dmax_kw: float = Field(50, gt=0)
+    eta_c: float = 0.95 
+    eta_d: float = 0.95
+    soc_target: Optional[float] = None          # default: = soc_init
+
+class DayInputs(BaseModel):
+    prices_buy: List[float]                      # $/kWh
+    demand_kw: List[float]                       # kW
+    prices_sell: Optional[List[float]] = None    # if None and export allowed, equals buy
+    allow_export: bool = False
+    dt_hours: float = 1.0
+
+class SolveRequest(BaseModel):
+    battery: BatteryParams
+    day: DayInputs
+    solver: Optional[str] = None                 # "CBC","GLPK_MI","SCIP","GUROBI","CPLEX"
+    solver_opts: Optional[Dict] = None
+
+class SolveFromRecordsRequest(BaseModel):
+    battery: BatteryParams
+    records: List[EnergyDataRecord]
+    dt_hours: float = 1.0
+    allow_export: bool = False
+    # if you pass a sell series, it will be used; else, sell==buy if export is allowed
+    prices_sell: Optional[List[float]] = None
+    solver: Optional[str] = None
+    solver_opts: Optional[Dict] = None
+
+class SolveResponse(BaseModel):
+    status: str
+    message: Optional[str] = None
+    objective_cost: Optional[float] = None
+    charge_kw: Optional[List[float]] = None
+    discharge_kw: Optional[List[float]] = None
+    import_kw: Optional[List[float]] = None
+    export_kw: Optional[List[float]] = None
+    soc: Optional[List[float]] = None 
