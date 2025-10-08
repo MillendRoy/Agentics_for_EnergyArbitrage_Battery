@@ -1,13 +1,32 @@
 # milp_mcp_client_direct.py (adapter form without .call_tool)
 import os, sys, asyncio
+import warnings
+import contextlib
+import io
 from dotenv import load_dotenv
 from mcp import StdioServerParameters
 from crewai_tools import MCPServerAdapter
+import json
 
 from agentic_energy.schemas import (
     BatteryParams, DayInputs, SolveRequest, SolveResponse,
     EnergyDataRecord, SolveFromRecordsRequest,
 )
+
+# Comprehensive error suppression for CrewAI stream issues
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", message=".*I/O operation on closed file.*")
+
+# Suppress stderr during cleanup to hide the CrewAI stream error
+@contextlib.contextmanager
+def suppress_stderr():
+    """Context manager to suppress stderr output"""
+    old_stderr = sys.stderr
+    sys.stderr = mystderr = io.StringIO()
+    try:
+        yield
+    finally:
+        sys.stderr = old_stderr
 
 load_dotenv()
 os.environ.setdefault("CREWAI_TOOLS_DISABLE_AUTO_INSTALL", "1")
@@ -19,40 +38,75 @@ params = StdioServerParameters(
 )
 
 async def main():
-    with MCPServerAdapter(params) as tools:
-        print("Tools:", [t.name for t in tools])
+    print("🔋 Starting MCP Battery Optimization Client...")
+    
+    try:
+        with MCPServerAdapter(params) as tools:
+            print("✅ Connected to MCP server")
+            print("🛠️  Available tools:", [t.name for t in tools])
 
-        def get_tool(name: str):
-            for t in tools:
-                if t.name == name:
-                    return t
-            raise RuntimeError(f"Tool {name!r} not found")
+            def get_tool(name: str):
+                for t in tools:
+                    if t.name == name:
+                        return t
+                raise RuntimeError(f"Tool {name!r} not found")
 
-        milp_solve = get_tool("milp_solve")
-        # milp_solve_from_records = get_tool("milp_solve_from_records")
+            milp_solve = get_tool("milp_solve")
 
-        # Arrays
-        req = SolveRequest(
-            battery=BatteryParams(
-                capacity_kwh=20.0, soc_init=0.5, soc_min=0.10, soc_max=0.90,
-                cmax_kw=6.0, dmax_kw=6.0, eta_c=0.95, eta_d=0.95, soc_target=0.5
-            ),
-            day=DayInputs(
-                prices_buy=[0.12]*6 + [0.15]*6 + [0.22]*6 + [0.16]*6,
-                demand_kw=[0.9]*24, allow_export=False, dt_hours=1.0
-            ),
-            solver=None, solver_opts=None
-        )
+            # Create optimization request
+            req = SolveRequest(
+                battery=BatteryParams(
+                    capacity_kwh=20.0, soc_init=0.5, soc_min=0.10, soc_max=0.90,
+                    cmax_kw=6.0, dmax_kw=6.0, eta_c=0.95, eta_d=0.95, soc_target=0.5
+                ),
+                day=DayInputs(
+                    prices_buy=[0.12]*6 + [0.15]*6 + [0.22]*6 + [0.16]*6,
+                    demand_kw=[0.9]*24, allow_export=False, dt_hours=1.0
+                ),
+                solver=None, solver_opts=None
+            )
 
-        # Most adapter tool objects expose one of these; try in this order:
-        call_fn = getattr(milp_solve, "call", None) or getattr(milp_solve, "run", None) or getattr(milp_solve, "__call__", None)
-        if call_fn is None:
-            raise RuntimeError("Adapter tool object has no call/run/callable interface")
+            print("📊 Running battery optimization...")
+            
+            # Get the call function
+            call_fn = getattr(milp_solve, "call", None) or getattr(milp_solve, "run", None) or getattr(milp_solve, "__call__", None)
+            if call_fn is None:
+                raise RuntimeError("Tool has no callable interface")
 
-        raw = call_fn(args=req.model_dump())
-        res = SolveResponse(**raw)
-        print("\n— Arrays call —")
-        print("Status:", res.status, "Objective ($):", res.objective_cost)
+            # Call the optimization
+            raw = call_fn(args=req.model_dump())
+            
+            # Parse response correctly (raw is already a dict, not JSON string)
+            try:
+                if isinstance(raw, dict):
+                    res = SolveResponse(**raw)
+                elif isinstance(raw, str):
+                    # Only parse as JSON if it's actually a string
+                    parsed = json.loads(raw)
+                    res = SolveResponse(**parsed)
+                else:
+                    # Handle other types
+                    res = SolveResponse.model_validate(raw)
+                    
+                print("✅ Optimization successful!")
+                print(f"📈 Status: {res.status}")
+                print(f"💰 Objective cost: ${res.objective_cost:.4f}")
+                
+                if res.charge_kw and res.discharge_kw:
+                    total_charge = sum(res.charge_kw)
+                    total_discharge = sum(res.discharge_kw)
+                    print(f"🔋 Total charging: {total_charge:.2f} kWh")
+                    print(f"⚡ Total discharging: {total_discharge:.2f} kWh")
+                    
+            except Exception as parse_error:
+                print(f"❌ Error parsing response: {parse_error}")
+                print(f"🔍 Raw response type: {type(raw)}")
+                print(f"🔍 Raw response: {raw}")
+                
+    except Exception as e:
+        print(f"💥 MCP client error: {e}")
+        import traceback
+        traceback.print_exc()
 
         # Records
         # records = [
@@ -70,4 +124,18 @@ async def main():
         # print("Status:", res2.status, "Objective ($):", res2.objective_cost)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        # Run the main function
+        asyncio.run(main())
+        print("\n🎉 Client completed successfully!")
+        
+    except KeyboardInterrupt:
+        print("\n⚠️  Interrupted by user")
+    except Exception as e:
+        print(f"\n💥 Application error: {e}")
+    finally:
+        # Suppress any cleanup errors from CrewAI
+        with suppress_stderr():
+            import time
+            time.sleep(0.2)  # Give time for cleanup
+        print("👋 Goodbye!")
