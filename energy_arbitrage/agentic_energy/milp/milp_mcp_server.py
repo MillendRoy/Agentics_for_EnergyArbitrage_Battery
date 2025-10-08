@@ -1,7 +1,7 @@
 from typing import Optional, Dict, Any, Tuple, List
 import numpy as np
 
-from agentic_energy.schemas import BatteryParams, DayInputs, SolveRequest, EnergyDataRecord, SolveResponse, SolveFromRecordsRequest
+from energy_arbitrage.agentic_energy.schemas import BatteryParams, DayInputs, SolveRequest, EnergyDataRecord, SolveResponse, SolveFromRecordsRequest
 from agentics import Agentics as AG
 import cvxpy as cp
 from mcp.server.fastmcp import FastMCP
@@ -25,7 +25,7 @@ def solve_daily_milp(
 
     T = len(day.prices_buy)
     if len(day.demand_kw) != T:
-        return {"status": "error", "message": "prices_buy and demand_kw lengths differ"}
+        return SolveResponse(status="error", message="prices_buy and demand_kw lengths differ")
 
     dt   = float(day.dt_hours)
     C    = float(batt.capacity_kwh)
@@ -93,7 +93,7 @@ def solve_daily_milp(
         else:
             prob.solve(**solver_opts)  # may fail if default solver isn't MILP-capable
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return SolveResponse(status="error", message=str(e))
 
     return SolveResponse(
         status=prob.status,
@@ -108,9 +108,9 @@ def solve_daily_milp(
 
 
 @mcp.tool()
-def milp_solve(args: SolveRequest) -> Dict[str, Any]:
+def milp_solve(args: SolveRequest) -> SolveResponse:
     """Run day-ahead battery MILP and return schedules + cost."""
-    return solve_daily_milp(args.battery, args.day, args.solver, args.solver_opts).model_dump()
+    return solve_daily_milp(args.battery, args.day, args.solver, args.solver_opts)
 
 @mcp.tool()
 def milp_solve_from_records(args: SolveFromRecordsRequest) -> SolveResponse:
@@ -123,7 +123,7 @@ def milp_solve_from_records(args: SolveFromRecordsRequest) -> SolveResponse:
         allow_export=args.allow_export,
         dt_hours=args.dt_hours
     )
-    return solve_daily_milp(args.battery, day, args.solver, args.solver_opts).model_dump()
+    return solve_daily_milp(args.battery, day, args.solver, args.solver_opts)
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
