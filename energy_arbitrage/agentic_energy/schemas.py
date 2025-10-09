@@ -32,14 +32,14 @@ class EnergyDataRecord(BaseModel):
     region: Optional[str] = Field(None, description="Energy market region")
 
 class BatteryParams(BaseModel):
-    capacity_kwh: float = Field(100.0, gt=0)      # C
-    soc_init: float = Field(0.5, ge=0, le=1)
-    soc_min: float = 0.0
-    soc_max: float = 1.0
-    cmax_kw: float = Field(50, gt=0)
-    dmax_kw: float = Field(50, gt=0)
-    eta_c: float = 0.95 
-    eta_d: float = 0.95
+    capacity_kwh: float = Field(100.0, gt=0, description="Battery capacity in kWh")      # C
+    soc_init: float = Field(0.5, ge=0, le=1, description="Initial State of Charge (SoC) as fraction of capacity")
+    soc_min: float = Field(0.0, ge=0, le=1, description="Minimum State of Charge (SoC) as fraction of capacity")
+    soc_max: float = Field(1.0, ge=0, le=1, description="Maximum State of Charge (SoC) as fraction of capacity")
+    cmax_kw: float = Field(50, gt=0, description="Maximum charge power rate in kW")
+    dmax_kw: float = Field(50, gt=0, description="Maximum discharge power rate in kW")
+    eta_c: float = Field(0.95, ge=0, le=1, description="Charge efficiency")
+    eta_d: float = Field(0.95, ge=0, le=1, description="Discharge efficiency")
     soc_target: Optional[float] = None          # default: = soc_init
 
 class DayInputs(BaseModel):
@@ -66,14 +66,14 @@ class SolveFromRecordsRequest(BaseModel):
     solver_opts: Optional[Dict] = None
 
 class SolveResponse(BaseModel):
-    status: str
+    status: str 
     message: Optional[str] = None
-    objective_cost: Optional[float] = None
-    charge_kw: Optional[List[float]] = None
-    discharge_kw: Optional[List[float]] = None
-    import_kw: Optional[List[float]] = None
-    export_kw: Optional[List[float]] = None
-    soc: Optional[List[float]] = None 
+    objective_cost: float = Field(..., description="total objective cost i.e. sum of (price_sell times grid_export subtracted from price_buy times grid_import) multiplied by the sample time of operation dt_hours across all timestamps")
+    charge_kw: Optional[List[float]] =Field(None, description="Battery charge schedule in kW")
+    discharge_kw: Optional[List[float]] = Field(None, description="Battery discharge schedule in kW")
+    import_kw: Optional[List[float]] = Field(None, description="Grid import schedule in kW")
+    export_kw: Optional[List[float]] = Field(None, description="Grid export schedule in kW")
+    soc: Optional[List[float]] = Field(None, description="State of Charge (SoC) over time")
 
 
 # New schemas for forecasting

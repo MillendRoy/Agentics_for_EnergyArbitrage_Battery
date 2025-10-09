@@ -54,7 +54,8 @@ def solve_daily_milp(
 
     cons = [
         soc >= soc_lo, soc <= soc_hi,
-        soc[0] == soc0, soc[T] >= soc_tgt
+        soc[0] == soc0, 
+        # soc[T] >= soc_tgt
     ]
     for t in range(T):
         cons += [
