@@ -10,7 +10,7 @@ import json
 from agentics import Agentics as AG
 import numpy as np
 
-from energy_arbitrage.agentic_energy.schemas import (
+from agentic_energy.schemas import (
     BatteryParams, DayInputs, SolveRequest, SolveResponse,
     EnergyDataRecord, SolveFromRecordsRequest,
 )
@@ -37,7 +37,7 @@ os.environ.setdefault("CREWAI_TOOLS_DISABLE_AUTO_INSTALL", "1")
 
 params = StdioServerParameters(
     command=sys.executable,
-    args=["-m", "energy_arbitrage.agentic_energy.milp.milp_mcp_server"],
+    args=["-m", "agentic_energy.milp.milp_mcp_server"],
     env=os.environ,
 )
 

@@ -60,8 +60,6 @@ class SolveFromRecordsRequest(BaseModel):
     records: List[EnergyDataRecord]
     dt_hours: float = 1.0
     allow_export: bool = False
-    # if you pass a sell series, it will be used; else, sell==buy if export is allowed
-    prices_sell: Optional[List[float]] = None
     solver: Optional[str] = None
     solver_opts: Optional[Dict] = None
 
