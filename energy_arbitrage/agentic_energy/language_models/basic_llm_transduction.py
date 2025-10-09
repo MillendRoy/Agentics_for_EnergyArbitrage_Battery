@@ -4,15 +4,11 @@ import warnings
 import contextlib
 import io
 from dotenv import load_dotenv
-from mcp import StdioServerParameters
-from crewai_tools import MCPServerAdapter
-import json
 from agentics import Agentics as AG
 import numpy as np
 
 from agentic_energy.schemas import (
     BatteryParams, DayInputs, SolveRequest, SolveResponse,
-    EnergyDataRecord, SolveFromRecordsRequest,
 )
 # Point to your server file
 # SERVER_PATH = os.getenv("MCP_MILP_SERVER", "milp_mcp_server.py")
