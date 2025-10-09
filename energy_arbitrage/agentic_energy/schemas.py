@@ -1,6 +1,40 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 
+# Add to agentic_energy/schemas.py
+
+class ArbitrageBatteryParams(BaseModel):
+    """Simplified battery parameters for pure arbitrage"""
+    capacity_mwh: float = Field(1.0, gt=0, description="Battery capacity in MWh")
+    soc_init: float = Field(0.5, ge=0, le=1, description="Initial State of Charge (fraction)")
+    soc_min: float = Field(0.0, ge=0, le=1, description="Minimum State of Charge (fraction)")
+    soc_max: float = Field(1.0, ge=0, le=1, description="Maximum State of Charge (fraction)")
+    power_mw: float = Field(0.25, gt=0, description="Max charge/discharge power in MW (typically capacity/4)")
+    eta_c: float = Field(0.95, ge=0, le=1, description="Charge efficiency")
+    eta_d: float = Field(0.95, ge=0, le=1, description="Discharge efficiency")
+
+class ArbitrageInputs(BaseModel):
+    """Price data for arbitrage optimization"""
+    prices: List[float] = Field(description="Hourly electricity prices (€/MWh or $/MWh)")
+    dt_hours: float = Field(1.0, description="Time step in hours")
+
+class ArbitrageRequest(BaseModel):
+    """Request for pure arbitrage optimization"""
+    battery: ArbitrageBatteryParams
+    inputs: ArbitrageInputs
+
+class ArbitrageResponse(BaseModel):
+    """Response from arbitrage optimization"""
+    status: str = Field(description="'success' or 'failure'")
+    message: Optional[str] = None
+    profit: float = Field(description="Total profit from arbitrage operations (€ or $)")
+    charge_mw: List[float] = Field(description="Hourly charge schedule in MW")
+    discharge_mw: List[float] = Field(description="Hourly discharge schedule in MW")
+    grid_buy_mw: List[float] = Field(description="Energy bought from grid (MW)")
+    grid_sell_mw: List[float] = Field(description="Energy sold to grid (MW)")
+    soc: List[float] = Field(description="State of charge over time (fraction, length T+1)")
+
+
 class MetricStats(BaseModel):
     count: Optional[int] = Field(None, description="Number of valid data points")
     min: Optional[float] = Field(None, description="Minimum value")

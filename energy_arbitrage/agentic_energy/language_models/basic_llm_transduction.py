@@ -4,7 +4,8 @@ import warnings
 import contextlib
 import io
 from dotenv import load_dotenv
-from agentics import Agentics as AG
+#from agentics import agentics as AG
+from agentics.core.agentics import AG
 import numpy as np
 
 from agentic_energy.schemas import (
@@ -21,10 +22,32 @@ warnings.filterwarnings("ignore", message=".*I/O operation on closed file.*")
 load_dotenv()
 os.environ.setdefault("CREWAI_TOOLS_DISABLE_AUTO_INSTALL", "1")
 
+# async def client_calling(data_records: DayInputs = None, battery_details: BatteryParams= None):
+#     # Start server and get tool adapter
+#     try:
+#         if data_records is None or len(data_records) == 0:
+#             hours = np.arange(24)
+#             prices_buy = 50 + 20*np.sin(2*np.pi*hours/24)
+#             demand = 5 + 2*np.cos(2*np.pi*hours/24)
+#             prices_sell = prices_buy  # or different if allowing export
+#             day = DayInputs(
+#                 prices_buy=prices_buy,
+#                 demand_kw=demand,
+#                 prices_sell=prices_sell,
+#                 allow_export=True,
+#                 dt_hours=1.0
+#             )
+
+#         if battery_details is None:
+#             battery_details = BatteryParams(
+#                 capacity_kwh=20.0, soc_init=0.5, soc_min=0.10, soc_max=0.90,
+#                 cmax_kw=5.0, dmax_kw=5.0, eta_c=0.95, eta_d=0.95, soc_target=0.5
+#             )
+
 async def client_calling(data_records: DayInputs = None, battery_details: BatteryParams= None):
     # Start server and get tool adapter
     try:
-        if data_records is None or len(data_records) == 0:
+        if data_records is None:  # ✅ FIXED - removed len() check
             hours = np.arange(24)
             prices_buy = 50 + 20*np.sin(2*np.pi*hours/24)
             demand = 5 + 2*np.cos(2*np.pi*hours/24)
@@ -36,12 +59,15 @@ async def client_calling(data_records: DayInputs = None, battery_details: Batter
                 allow_export=True,
                 dt_hours=1.0
             )
+        else:
+            day = data_records  # ✅ Use the provided DayInputs object
 
         if battery_details is None:
             battery_details = BatteryParams(
                 capacity_kwh=20.0, soc_init=0.5, soc_min=0.10, soc_max=0.90,
-                cmax_kw=6.0, dmax_kw=6.0, eta_c=0.95, eta_d=0.95, soc_target=0.5
+                cmax_kw=5.0, dmax_kw=5.0, eta_c=0.95, eta_d=0.95, soc_target=0.5
             )
+        
         
         req = SolveRequest(
             battery=battery_details,
@@ -72,7 +98,7 @@ async def client_calling(data_records: DayInputs = None, battery_details: Batter
             # and return the SolveResponse object with a goal to at least fulfill the demand_kw at each timestamp using the grid import and the battery
             # and maximize profit by selling the excess as grid export by taking advantage of the price variation.'''
             instructions='''
-                You are solving a daily battery scheduling optimization problem using Mixed Integer Linear Programming (MILP). 
+                You are solving a daily battery scheduling problem. 
                 You are given a request object containing:
                 - Hourly energy prices for buying and selling electricity.
                 - Hourly electricity demand from a building or system.
