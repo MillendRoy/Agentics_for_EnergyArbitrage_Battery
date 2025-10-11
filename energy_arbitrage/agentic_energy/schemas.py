@@ -33,6 +33,7 @@ class ArbitrageResponse(BaseModel):
     grid_buy_mw: List[float] = Field(description="Energy bought from grid (MW)")
     grid_sell_mw: List[float] = Field(description="Energy sold to grid (MW)")
     soc: List[float] = Field(description="State of charge over time (fraction, length T+1)")
+    confidence: Optional[float] = Field(None, description="Confidence score of the solution (0 to 1)")
 
 
 class MetricStats(BaseModel):

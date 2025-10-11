@@ -262,10 +262,11 @@ async def optimize_arbitrage(
             **Output Format:**
             Return ArbitrageResponse with:
             - status: "success"
-            - message: Describe your multi-cycle strategy
+            - message: Describe your multi-cycle strategy (Please describe your reasoning similar to the following format: "Multi-cycle continuous arbitrage strategy executed across 11 active hours. Strategy: (1) Early discharge at €100 to create capacity, (2) Strategic intermediate cycles hours 3-9 to capture medium spreads, (3) Aggressive charging hours 9-15 during valley period (€70-90), (4) Maximum discharge hours 18-21 during peak (€120-160). Battery fully utilized with SoC cycling: 50%→23.7%→100%→0%. Achieved 5 charge cycles and 6 discharge cycles. Buying at average €90/MWh, selling at €120/MWh generates x profit with y ROI.")
             - profit: Total profit (should be MUCH higher with continuous trading!)
             - charge_mw, discharge_mw, grid_buy_mw, grid_sell_mw: Full 24-hour schedules
             - soc: State of charge trajectory showing multiple cycles
+            - condifence: Your confidence in this solution (0 to 1)
 
             **VERIFICATION:**
             - Count non-zero operations: Should see 15-20 hours of activity, not 6-8!
