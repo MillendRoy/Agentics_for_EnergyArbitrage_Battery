@@ -2,7 +2,7 @@ from typing import Optional, Dict, Any, Tuple, List
 import numpy as np
 
 from agentic_energy.schemas import BatteryParams, DayInputs, SolveRequest, EnergyDataRecord, SolveResponse, SolveFromRecordsRequest
-from agentics import Agentics as AG
+from agentics import agentics as AG
 import cvxpy as cp
 from mcp.server.fastmcp import FastMCP
 

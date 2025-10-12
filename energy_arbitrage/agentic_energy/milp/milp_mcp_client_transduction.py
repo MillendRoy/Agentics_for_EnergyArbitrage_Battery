@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from mcp import StdioServerParameters
 from crewai_tools import MCPServerAdapter
 import json
-from agentics import Agentics as AG
+from agentics import agentics as AG
 import numpy as np
 
 from agentic_energy.schemas import (
