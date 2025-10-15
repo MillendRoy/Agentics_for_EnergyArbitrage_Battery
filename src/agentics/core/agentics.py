@@ -563,23 +563,44 @@ class AG(BaseModel, Generic[T]):
             )
             transduced_results = await pt.execute(
                 *input_prompts,
-                description = f"Transducing {{self.__name__}} << {'AG[str]' if not isinstance(other, AG) else other.__name__}"
-,
+                # description = f"Transducing {{self.__name__}} << {'AG[str]' if not isinstance(other, AG) else other.__name__}"
+                description = f"Transducing {self.__name__} << {'AG[str]' if not isinstance(other, AG) else other.__name__}",
                 transient_pbar=self.transient_pbar
             )
         except Exception as e:
             transduced_results = self.states
 
+        # n_errors = 0
+        # output_states = []
+        # for i, result in enumerate(transduced_results):
+        #     if isinstance(result, Exception):
+        #         output_states.append(
+        #             self.states[i] if i < len(self.states) else target_type()
+        #         )
+        #         n_errors += 1
+        #     else:
+        #         output_states.append(result)
+
         n_errors = 0
         output_states = []
         for i, result in enumerate(transduced_results):
             if isinstance(result, Exception):
+                # **ADD THIS: Log the actual exception**
+                if self.verbose_transduction:
+                    logger.error(f"❌ Transduction failed for state {i}:")
+                    logger.error(f"   Exception type: {type(result).__name__}")
+                    logger.error(f"   Exception message: {str(result)}")
+                    import traceback
+                    logger.error(f"   Traceback:\n{''.join(traceback.format_exception(type(result), result, result.__traceback__))}")
+                
                 output_states.append(
                     self.states[i] if i < len(self.states) else target_type()
                 )
                 n_errors += 1
             else:
                 output_states.append(result)
+
+
         if self.verbose_transduction:
             if n_errors:
                 logger.debug(f"Error: {n_errors} states have not been transduced")

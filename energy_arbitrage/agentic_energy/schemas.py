@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Literal
 
+from typing import List, Optional, Dict, Literal, Any  # Add Any to imports
+
+
 class MetricStats(BaseModel):
     count: Optional[int] = Field(None, description="Number of valid data points")
     min: Optional[float] = Field(None, description="Minimum value")
@@ -89,30 +92,98 @@ class SolveFromRecordsRequest(BaseModel):
     solver: Optional[str] = None
     solver_opts: Optional[Dict] = None
 
-# UPDATED: Enhanced response with detailed explanations
+
 class SolveResponse(BaseModel):
-    status: str = Field(description="Solution status (success/failure)")
+    status: str = Field(default="pending", description="Solution status (success/failure)")
     message: Optional[str] = Field(
         None, 
-        description="Comprehensive explanation of the optimization strategy and decisions"
+        description="Detailed reasoning explaining the optimization strategy and key decisions"
     )
     objective_cost: float = Field(
-        description="Total objective cost: sum of (price_buy * grid_import - price_sell * grid_export) * dt_hours across all timestamps"
+        default=0.0,
+        description="Total objective cost in currency units"
     )
+    
+    # ADD THIS NEW FIELD:
+    prices_buy: Optional[List[float]] = Field(None, description="Input electricity prices for buying (€/kWh)")
+    demand_kw: Optional[List[float]] = Field(None, description="Input electricity demand (kW)")
+    
     charge_kw: Optional[List[float]] = Field(None, description="Battery charge schedule in kW")
     discharge_kw: Optional[List[float]] = Field(None, description="Battery discharge schedule in kW")
     import_kw: Optional[List[float]] = Field(None, description="Grid import schedule in kW")
     export_kw: Optional[List[float]] = Field(None, description="Grid export schedule in kW")
-    soc: Optional[List[float]] = Field(None, description="State of Charge (SoC) over time (fraction of capacity)")
+    soc: Optional[List[float]] = Field(None, description="State of Charge over time (fraction of capacity)")
     decision: Optional[List[float]] = Field(
         None, 
         description="Decision at each time step: charge (+1), discharge (-1), idle (0)"
     )
     confidence: Optional[List[float]] = Field(None, description="Confidence level of each decision (0 to 1)")
     
-    # NEW: Additional metadata
     data_source: Optional[str] = Field(None, description="Data source used (actual/forecast)")
-    forecast_info: Optional[Dict] = Field(None, description="Information about forecast models used")
+    forecast_info: Optional[Dict[str, str]] = Field(None, description="Information about forecast models used")
+
+# class SolveResponse(BaseModel):
+#     status: str = Field(default="pending", description="Solution status (success/failure)")
+#     message: Optional[str] = Field(
+#         None, 
+#         description="Comprehensive explanation of the optimization strategy and decisions"
+#     )
+#     objective_cost: float = Field(
+#         default=0.0,
+#         description="Total objective cost: sum of (price_buy * grid_import - price_sell * grid_export) * dt_hours across all timestamps"
+#     )
+#     charge_kw: Optional[List[float]] = Field(None, description="Battery charge schedule in kW")
+#     discharge_kw: Optional[List[float]] = Field(None, description="Battery discharge schedule in kW")
+#     import_kw: Optional[List[float]] = Field(None, description="Grid import schedule in kW")
+#     export_kw: Optional[List[float]] = Field(None, description="Grid export schedule in kW")
+#     soc: Optional[List[float]] = Field(None, description="State of Charge (SoC) over time (fraction of capacity)")
+#     decision: Optional[List[float]] = Field(
+#         None, 
+#         description="Decision at each time step: charge (+1), discharge (-1), idle (0)"
+#     )
+#     confidence: Optional[List[float]] = Field(None, description="Confidence level of each decision (0 to 1)")
+    
+#     # FIX THESE TWO LINES:
+#     data_source: Optional[str] = Field(None, description="Data source used (actual/forecast)")
+#     forecast_info: Optional[Dict[str, str]] = Field(None, description="Information about forecast models used")  # ← FIXED
+# class SolveResponse(BaseModel):
+#     status: str = Field(default="pending", description="Solution status")
+#     message: Optional[str] = None
+#     objective_cost: float = Field(default=0.0, description="Total cost")
+#     charge_kw: Optional[List[float]] = None
+#     discharge_kw: Optional[List[float]] = None
+#     import_kw: Optional[List[float]] = None
+#     export_kw: Optional[List[float]] = None
+#     soc: Optional[List[float]] = None
+#     decision: Optional[List[float]] = None
+#     confidence: Optional[List[float]] = None
+#     data_source: Optional[str] = None
+#     forecast_info: Optional[Dict] = None
+
+# UPDATED: Enhanced response with detailed explanations
+# class SolveResponse(BaseModel):
+#     status: str = Field(description="Solution status (success/failure)")
+#     message: Optional[str] = Field(
+#         None, 
+#         description="Comprehensive explanation of the optimization strategy and decisions"
+#     )
+#     objective_cost: float = Field(
+#         description="Total objective cost: sum of (price_buy * grid_import - price_sell * grid_export) * dt_hours across all timestamps"
+#     )
+#     charge_kw: Optional[List[float]] = Field(None, description="Battery charge schedule in kW")
+#     discharge_kw: Optional[List[float]] = Field(None, description="Battery discharge schedule in kW")
+#     import_kw: Optional[List[float]] = Field(None, description="Grid import schedule in kW")
+#     export_kw: Optional[List[float]] = Field(None, description="Grid export schedule in kW")
+#     soc: Optional[List[float]] = Field(None, description="State of Charge (SoC) over time (fraction of capacity)")
+#     decision: Optional[List[float]] = Field(
+#         None, 
+#         description="Decision at each time step: charge (+1), discharge (-1), idle (0)"
+#     )
+#     confidence: Optional[List[float]] = Field(None, description="Confidence level of each decision (0 to 1)")
+    
+#     # NEW: Additional metadata
+#     data_source: Optional[str] = Field(None, description="Data source used (actual/forecast)")
+#     forecast_info: Optional[Dict] = Field(None, description="Information about forecast models used")
 
 # Forecast result schemas
 class ForecastRecord(BaseModel):
