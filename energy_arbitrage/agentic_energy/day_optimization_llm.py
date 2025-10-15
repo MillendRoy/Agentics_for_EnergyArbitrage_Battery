@@ -649,8 +649,8 @@ async def optimize_day_simple(
         stats = loader.get_load_statistics()
         
         # IQR * 4 hours rule (convert from MW to kW)
-        capacity_kwh = stats['recommended_capacity_mwh'] * 1000  # MWh to kWh
-        power_kw = stats['recommended_power_mw'] * 1000  # MW to kW
+        capacity_kwh = stats['recommended_capacity_mwh']# MWh to kWh
+        power_kw = stats['recommended_power_mw'] # MW to kW
         
         print(f"📊 Automatic Battery Sizing (IQR Method):")
         print(f"   Load Mean: {stats['mean']:.2f} MW")
