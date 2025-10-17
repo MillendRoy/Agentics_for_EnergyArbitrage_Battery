@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Callable
 from ray.tune.logger import UnifiedLogger, TBXLogger, JsonLogger, CSVLogger
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
-
+from collections import deque
+import math
 
 def setup_python_logging(level=logging.WARNING):
     logging.basicConfig(
@@ -136,7 +137,93 @@ class PrintCallbacks(DefaultCallbacks):
         if cur_lr is not None:   line.append(f"lr={cur_lr:.1e}")
         if train_slope is not None: line.append(f"| trend(train)={train_slope:+.3f}/iter")
         if eval_slope  is not None: line.append(f"trend(eval)={eval_slope:+.3f}/iter")
-        print("  ".join(line))
+        # print("  ".join(line))
 
         self._train_rewards.clear()
         self._train_lengths.clear()
+
+
+
+class MetricTracker:
+    def __init__(self, ema_alpha: float = 0.1):
+        self.ema_alpha = ema_alpha
+        self.train_return_ema = None
+        self.history = deque(maxlen=100)
+
+    def _safe_get(self, d, path, default=None):
+        cur = d
+        for k in path:
+            if cur is None:
+                return default
+            if isinstance(cur, dict):
+                cur = cur.get(k, None)
+            else:
+                cur = getattr(cur, k, None)
+        return default if cur is None else cur
+
+    def _extract(self, result: dict):
+        train_mean = (
+            self._safe_get(result, ["episode_reward_mean"]) or
+            self._safe_get(result, ["env_runners", "episode_reward_mean"]) or
+            self._safe_get(result, ["env_runners", "policy_reward_mean", "default_policy"])
+        )
+        eval_mean = self._safe_get(result, ["evaluation", "episode_reward_mean"])
+
+        learner = self._safe_get(result, ["info", "learner"], {}) or {}
+        pol_keys = [k for k, v in getattr(learner, "items", lambda: learner.items())() if isinstance(v, dict)]
+        pol = learner[pol_keys[0]] if pol_keys else {}
+        ls  = self._safe_get(pol, ["learner_stats"], {}) or pol
+
+        kl        = self._safe_get(ls, ["kl"])
+        ent       = self._safe_get(ls, ["entropy"])
+        vexp      = self._safe_get(ls, ["vf_explained_var"])
+        return train_mean, eval_mean, kl, ent, vexp
+
+    def _fmt(self, x, nd=3, default="NA"):
+        if x is None or (isinstance(x, float) and (math.isnan(x) or math.isinf(x))):
+            return default
+        return f"{float(x):.{nd}f}"
+
+    def _get_eval_return_mean(self, result: dict):
+        # Newer style: nested dict
+        if "evaluation" in result and isinstance(result["evaluation"], dict):
+            return result["evaluation"].get("episode_reward_mean")
+        # Flattened keys (some versions)
+        for k in ("evaluation/episode_reward_mean", "evaluation_episode_reward_mean"):
+            if k in result:
+                return result[k]
+        return None
+
+    def update_and_print(self, it: int, result: dict):
+        train_mean, eval_mean, kl, ent, vexp = self._extract(result)
+        eval_mean = self._get_eval_return_mean(result)
+        if train_mean is not None:
+            if self.train_return_ema is None:
+                self.train_return_ema = float(train_mean)
+            else:
+                a = self.ema_alpha
+                self.train_return_ema = a * float(train_mean) + (1 - a) * self.train_return_ema
+
+        kl_ok    = (kl is not None) and (0.005 <= float(kl) <= 0.02)
+        vexp_ok  = (vexp is not None) and (float(vexp) >= 0.80)
+
+        line = (
+            f"[ITER {it:>3}] "
+            f"trainR={self._fmt(train_mean, nd=2)} "
+            f"(EMA={self._fmt(self.train_return_ema, nd=2)})  "
+            f"evalR={self._fmt(eval_mean, nd=2)}  "
+            f"KL={self._fmt(kl)}{'✅' if kl_ok else '⚠'}  "
+            f"Entropy={self._fmt(ent, nd=3)}  "
+            f"Vexp={self._fmt(vexp, nd=3)}{'✅' if vexp_ok else '⚠'}"
+        )
+        print(line)
+
+        tips = []
+        if kl is not None and float(kl) > 0.03:
+            tips.append("KL high → lower lr or fewer epochs")
+        if kl is not None and float(kl) < 0.003:
+            tips.append("KL low → higher lr or more epochs")
+        if vexp is not None and float(vexp) < 0.7:
+            tips.append("Value net weak → adjust value loss coeff or lr")
+        if tips:
+            print("        notes:", " | ".join(tips))

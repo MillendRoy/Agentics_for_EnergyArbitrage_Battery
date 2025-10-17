@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 from pathlib import Path
+from dataclasses import dataclass
 
 # Default run dirs
 DEFAULT_SAVE_DIR = "runs/rllib_battery"
@@ -28,3 +29,23 @@ def ensure_dir(path: str | Path) -> Path:
     p = Path(path)
     p.mkdir(parents=True, exist_ok=True)
     return p
+
+
+@dataclass
+class PPOTrainSettings:
+    # runners / collection
+    num_env_runners: int = 4
+    rollout_fragment_length: int = 24
+
+    # PPO training
+    gamma: float = 0.99
+    lr: float = 3e-4
+    train_batch_size: int = 3072   # 24 * 128 episodes
+    minibatch_size: int = 256
+    num_epochs: int = 5
+    clip_param: float = 0.2
+    vf_clip_param: float = 10.0
+
+    # evaluation
+    evaluation_interval: int = 5        # every N training iterations
+    evaluation_episodes: int = 10       # per eval pass
